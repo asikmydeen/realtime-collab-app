@@ -1,0 +1,7 @@
+{
+  "install": "cd server && npm install",
+  "start": "cd server && node server.js",
+  "watch": {
+    "throttle": 1000
+  }
+}
