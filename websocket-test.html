@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebSocket Test</title>
+</head>
+<body>
+    <h1>WebSocket Collaboration Test</h1>
+    <canvas id="canvas" width="800" height="400" style="border: 1px solid black;"></canvas>
+    <div id="status">Connecting...</div>
+    <button onclick="clearCanvas()">Clear</button>
+    
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const status = document.getElementById('status');
+        
+        // Clear canvas
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Connect to WebSocket
+        const ws = new WebSocket('ws://localhost:3001');
+        let clientId = null;
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        
+        ws.onopen = () => {
+            status.textContent = 'Connected!';
+            console.log('WebSocket connected');
+        };
+        
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            console.log('Received:', data.type, data);
+            
+            switch(data.type) {
+                case 'welcome':
+                    clientId = data.clientId;
+                    status.textContent = `Connected as ${clientId.slice(-4)}`;
+                    // Join default room
+                    ws.send(JSON.stringify({ type: 'join', room: 'default' }));
+                    break;
+                    
+                case 'draw':
+                    // Draw if it's not from us
+                    if (data.clientId !== clientId) {
+                        drawLine(data.x1, data.y1, data.x2, data.y2, data.color || 'black', data.size || 2);
+                    }
+                    break;
+                    
+                case 'clear':
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    break;
+            }
+        };
+        
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            status.textContent = 'Error!';
+        };
+        
+        ws.onclose = () => {
+            status.textContent = 'Disconnected';
+        };
+        
+        // Drawing functions
+        function drawLine(x1, y1, x2, y2, color, size) {
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = size;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+        }
+        
+        // Mouse events
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            lastX = e.clientX - rect.left;
+            lastY = e.clientY - rect.top;
+            isDrawing = true;
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // Draw locally
+            drawLine(lastX, lastY, x, y, 'black', 2);
+            
+            // Send to server
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'draw',
+                    x1: lastX,
+                    y1: lastY,
+                    x2: x,
+                    y2: y,
+                    color: 'black',
+                    size: 2
+                }));
+            }
+            
+            lastX = x;
+            lastY = y;
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+        });
+        
+        canvas.addEventListener('mouseleave', () => {
+            isDrawing = false;
+        });
+        
+        function clearCanvas() {
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'clear' }));
+            }
+        }
+    </script>
+</body>
+</html>

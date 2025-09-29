@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collaborative Canvas Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: sans-serif;
+            background: #1a1a1a;
+            color: white;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+            height: calc(100vh - 80px);
+        }
+        iframe {
+            flex: 1;
+            border: 2px solid #333;
+            border-radius: 10px;
+            background: white;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .info {
+            text-align: center;
+            color: #888;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎨 Real-Time Collaboration Test</h1>
+    <div class="info">Draw in one window and see it appear in the other!</div>
+    <div class="container">
+        <iframe src="http://localhost:3000" title="User 1"></iframe>
+        <iframe src="http://localhost:3000" title="User 2"></iframe>
+    </div>
+</body>
+</html>
