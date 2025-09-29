@@ -4,6 +4,7 @@ import { Controls } from './components/Controls';
 import { Stats } from './components/Stats';
 import { WebSocketManager } from './lib/websocket';
 import { WasmProcessor } from './lib/wasm';
+import { config } from './config';
 
 function App() {
   // State management
@@ -32,7 +33,7 @@ function App() {
     setWasmProcessor(wasm);
     
     // Initialize WebSocket
-    const ws = new WebSocketManager('ws://localhost:3001');
+    const ws = new WebSocketManager(config.wsUrl);
     
     ws.on('connected', () => {
       setConnected(true);
