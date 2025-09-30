@@ -107,6 +107,14 @@ export class WebSocketManager {
     this.send({ type: 'clear' });
   }
   
+  switchRegion(regionId) {
+    this.send({ type: 'switchRegion', regionId });
+  }
+  
+  requestChunk(chunkId) {
+    this.send({ type: 'requestChunk', chunkId });
+  }
+  
   startPing() {
     this.pingInterval = setInterval(() => {
       this.send({ type: 'ping', timestamp: Date.now() });

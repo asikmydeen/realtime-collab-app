@@ -1,7 +1,8 @@
 import { createSignal, onMount, onCleanup, createEffect, For, Show } from 'solid-js';
-import { Canvas } from './components/Canvas';
+import { InfiniteCanvas } from './components/InfiniteCanvas';
 import { Controls } from './components/Controls';
 import { Stats } from './components/Stats';
+import { Minimap } from './components/Minimap';
 import { WebSocketManager } from './lib/websocket';
 import { WasmProcessor } from './lib/wasm';
 import { config } from './config';
@@ -19,6 +20,8 @@ function App() {
   const [webglEnabled, setWebglEnabled] = createSignal(true);
   const [showControls, setShowControls] = createSignal(true);
   const [username, setUsername] = createSignal(generateUsername());
+  const [navigateTo, setNavigateTo] = createSignal(null);
+  const [canvasMode, setCanvasMode] = createSignal('infinite'); // 'classic' or 'infinite'
   
   // Performance metrics
   const [fps, setFps] = createSignal(60);
@@ -214,25 +217,53 @@ function App() {
         
         <div class="canvas-container">
           <div class="canvas-wrapper">
-            <Canvas
-              tool={tool()}
-              color={color()}
-              brushSize={brushSize()}
-              webglEnabled={webglEnabled()}
-              onDraw={handleDraw}
-              onCursor={handleCursor}
-              setLatency={setLatency}
-              wsManager={wsManager()}
-              wasmProcessor={wasmProcessor()}
-              currentUser={currentUser()}
-              users={users()}
-            />
+            <Show when={canvasMode() === 'infinite'} fallback={
+              <Canvas
+                tool={tool()}
+                color={color()}
+                brushSize={brushSize()}
+                webglEnabled={webglEnabled()}
+                onDraw={handleDraw}
+                onCursor={handleCursor}
+                setLatency={setLatency}
+                wsManager={wsManager()}
+                wasmProcessor={wasmProcessor()}
+                currentUser={currentUser()}
+                users={users()}
+              />
+            }>
+              <InfiniteCanvas
+                tool={tool()}
+                color={color()}
+                brushSize={brushSize()}
+                onDraw={handleDraw}
+                onCursor={handleCursor}
+                setLatency={setLatency}
+                wsManager={wsManager()}
+                currentUser={currentUser()}
+                users={users()}
+                navigateTo={navigateTo()}
+              />
+            </Show>
           </div>
         </div>
         
         <div class="users-panel">
+          <div class="toggle" onClick={() => setCanvasMode(canvasMode() === 'infinite' ? 'classic' : 'infinite')}>
+            <div class={`toggle-switch ${canvasMode() === 'infinite' ? 'active' : ''}`} />
+            <span>Infinite Canvas</span>
+          </div>
+          
+          <Show when={canvasMode() === 'infinite'}>
+            <Minimap 
+              viewport={currentUser()?.viewport}
+              users={Array.from(users().values())}
+              onNavigate={(x, y) => setNavigateTo({ x, y })}
+            />
+          </Show>
+          
           <h3>Users in Room</h3>
-          <div class="users-list">
+          <div class="users-list" style={{ 'max-height': '300px', 'overflow-y': 'auto' }}>
             <For each={Array.from(users().values())}>
               {(user) => (
                 <div class={`user-item ${user.isMe ? 'me' : ''}`}>

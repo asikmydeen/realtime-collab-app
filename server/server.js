@@ -8,6 +8,7 @@ import sharp from 'sharp';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { InfiniteCanvasServer } from './infiniteCanvas.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -54,6 +55,9 @@ const wss = new WebSocketServer({
 // In-memory state
 const rooms = new Map();
 const clients = new Map();
+
+// Infinite canvas server
+const infiniteCanvas = new InfiniteCanvasServer();
 
 // Performance metrics
 let totalOperations = 0;
@@ -193,6 +197,14 @@ wss.on('connection', (ws, req) => {
           handleImageProcess(clientId, message);
           break;
           
+        case 'switchRegion':
+          handleRegionSwitch(clientId, message.regionId);
+          break;
+          
+        case 'requestChunk':
+          handleChunkRequest(clientId, message.chunkId);
+          break;
+          
         case 'ping':
           ws.send(JSON.stringify({ 
             type: 'pong', 
@@ -235,6 +247,7 @@ wss.on('connection', (ws, req) => {
     }
     
     clients.delete(clientId);
+    cleanupInfiniteCanvas(clientId);
   });
 
   ws.on('error', (error) => {
@@ -427,6 +440,57 @@ server.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`🔌 WebSocket available on ws://localhost:${PORT}`);
 });
+
+// Infinite Canvas Handlers
+async function handleRegionSwitch(clientId, regionId) {
+  infiniteCanvas.regionManager.switchRegion(clientId, regionId);
+  console.log(`Client ${clientId} switched to ${regionId}`);
+}
+
+async function handleChunkRequest(clientId, chunkId) {
+  const client = clients.get(clientId);
+  if (!client) return;
+
+  try {
+    const chunkData = await infiniteCanvas.getChunkData(chunkId);
+    client.ws.send(JSON.stringify({
+      type: 'chunkData',
+      ...chunkData
+    }));
+  } catch (error) {
+    console.error('Error loading chunk:', error);
+  }
+}
+
+// Modified draw handler for infinite canvas
+async function handleInfiniteCanvasDraw(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client) return;
+
+  // Process draw operation
+  const affectedClients = await infiniteCanvas.handleDrawOperation(clientId, message);
+  
+  // Broadcast to clients in the same region
+  const drawOp = {
+    type: 'remoteDraw',
+    clientId,
+    ...message
+  };
+
+  affectedClients.forEach(targetId => {
+    if (targetId !== clientId) {
+      const targetClient = clients.get(targetId);
+      if (targetClient && targetClient.ws.readyState === 1) {
+        targetClient.ws.send(JSON.stringify(drawOp));
+      }
+    }
+  });
+}
+
+// Cleanup on disconnect
+function cleanupInfiniteCanvas(clientId) {
+  infiniteCanvas.regionManager.removeClient(clientId);
+}
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
