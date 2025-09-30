@@ -9,6 +9,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { InfiniteCanvasServer } from './infiniteCanvas.js';
+import { ServerSpaceManager } from './spaceManager.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -58,6 +59,12 @@ const clients = new Map();
 
 // Infinite canvas server
 const infiniteCanvas = new InfiniteCanvasServer();
+
+// Space manager for world canvas
+const spaceManager = new ServerSpaceManager();
+
+// Make clients globally accessible for space manager
+global.wsClients = clients;
 
 // Performance metrics
 let totalOperations = 0;
@@ -196,7 +203,8 @@ wss.on('connection', (ws, req) => {
           break;
           
         case 'draw':
-          handleDraw(clientId, message);
+          // Use world canvas draw handler for the infinite canvas
+          handleWorldCanvasDraw(clientId, message);
           break;
           
         case 'cursor':
@@ -229,6 +237,23 @@ wss.on('connection', (ws, req) => {
             timestamp: Date.now(),
             latency: Date.now() - message.timestamp 
           }));
+          break;
+
+        // Space management messages
+        case 'requestSpace':
+          handleRequestSpace(clientId, message);
+          break;
+          
+        case 'activity':
+          handleActivity(clientId, message);
+          break;
+          
+        case 'markDrawn':
+          handleMarkDrawn(clientId);
+          break;
+          
+        case 'releaseSpace':
+          handleReleaseSpace(clientId);
           break;
 
         default:
@@ -266,6 +291,9 @@ wss.on('connection', (ws, req) => {
     
     clients.delete(clientId);
     cleanupInfiniteCanvas(clientId);
+    
+    // Release space on disconnect
+    spaceManager.releaseUserSpace(clientId);
   });
 
   ws.on('error', (error) => {
@@ -569,6 +597,77 @@ function handlePixelPlace(clientId, message) {
   }
   
   console.log(`Pixel placed at (${x},${y}) by ${clientId}`);
+}
+
+// Space Management Handlers
+function handleRequestSpace(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client) return;
+  
+  const space = spaceManager.assignSpace(
+    clientId, 
+    message.viewportWidth, 
+    message.viewportHeight
+  );
+  
+  client.ws.send(JSON.stringify({
+    type: 'spaceAssigned',
+    space
+  }));
+  
+  // Broadcast space update to all clients
+  broadcastSpaceUpdate();
+}
+
+function handleActivity(clientId, message) {
+  spaceManager.updateActivity(clientId, message.isDrawing);
+}
+
+function handleMarkDrawn(clientId) {
+  spaceManager.updateActivity(clientId, true);
+}
+
+function handleReleaseSpace(clientId) {
+  spaceManager.releaseUserSpace(clientId);
+  broadcastSpaceUpdate();
+}
+
+function broadcastSpaceUpdate() {
+  const allSpaces = spaceManager.getAllSpaces();
+  
+  // Broadcast to all connected clients
+  clients.forEach((client) => {
+    if (client.ws.readyState === 1) {
+      client.ws.send(JSON.stringify({
+        type: 'spaceUpdate',
+        spaces: allSpaces
+      }));
+    }
+  });
+}
+
+// Modified draw handler to work with space-based canvas
+function handleWorldCanvasDraw(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client) return;
+  
+  // Update activity when drawing
+  if (message.type === 'draw') {
+    spaceManager.updateActivity(clientId, true);
+  }
+  
+  totalOperations++;
+  
+  // Broadcast to all clients (they handle visibility themselves)
+  clients.forEach((targetClient, targetId) => {
+    if (targetId !== clientId && targetClient.ws.readyState === 1) {
+      targetClient.ws.send(JSON.stringify({
+        type: 'remoteDraw',
+        clientId,
+        ...message
+      }));
+    }
+  });
 }
 
 // Graceful shutdown

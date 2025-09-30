@@ -312,7 +312,11 @@ export class InfiniteCanvasDrawing {
   }
 
   draw(worldX, worldY, color, size) {
-    if (!this.isDrawing || !this.lastPos) return;
+    // Allow drawing even if not in active drawing mode (for remote draws)
+    if (!this.lastPos) {
+      this.lastPos = { x: worldX, y: worldY };
+      return;
+    }
 
     // Get all chunks this line passes through
     const chunks = this.getAffectedChunks(

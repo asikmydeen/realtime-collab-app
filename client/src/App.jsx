@@ -1,10 +1,7 @@
-import { createSignal, onMount, onCleanup, createEffect, For, Show } from 'solid-js';
-import { Canvas } from './components/Canvas';
-import { InfiniteCanvas } from './components/InfiniteCanvas';
-import { PixelCanvas } from './components/PixelCanvas';
+import { createSignal, onMount, onCleanup, createEffect, For } from 'solid-js';
+import { WorldCanvas } from './components/WorldCanvas';
 import { Controls } from './components/Controls';
 import { Stats } from './components/Stats';
-import { Minimap } from './components/Minimap';
 import { WebSocketManager } from './lib/websocket';
 import { WasmProcessor } from './lib/wasm';
 import { config } from './config';
@@ -13,17 +10,12 @@ import { getUserColor, generateUsername, getContrastColor } from './utils/userCo
 function App() {
   // State management
   const [connected, setConnected] = createSignal(false);
-  const [room, setRoom] = createSignal('default');
   const [users, setUsers] = createSignal(new Map());
   const [currentUser, setCurrentUser] = createSignal(null);
   const [tool, setTool] = createSignal('pen');
-  const [color, setColor] = createSignal('#4ade80');
-  const [brushSize, setBrushSize] = createSignal(5);
-  const [webglEnabled, setWebglEnabled] = createSignal(true);
-  const [showControls, setShowControls] = createSignal(true);
+  const [color, setColor] = createSignal('#000000');
+  const [brushSize, setBrushSize] = createSignal(3);
   const [username, setUsername] = createSignal(generateUsername());
-  const [navigateTo, setNavigateTo] = createSignal(null);
-  const [canvasMode, setCanvasMode] = createSignal('pixel'); // 'classic', 'infinite', or 'pixel'
   
   // Performance metrics
   const [fps, setFps] = createSignal(60);
@@ -31,7 +23,7 @@ function App() {
   const [latency, setLatency] = createSignal(0);
   const [networkLatency, setNetworkLatency] = createSignal(0);
   
-  // WebSocket and WASM managers as signals
+  // WebSocket and WASM managers
   const [wsManager, setWsManager] = createSignal(null);
   const [wasmProcessor, setWasmProcessor] = createSignal(null);
   
@@ -47,7 +39,7 @@ function App() {
     
     ws.on('connected', () => {
       setConnected(true);
-      ws.joinRoom(room(), username());
+      ws.joinRoom('world', username());
     });
     
     ws.on('welcome', (data) => {
@@ -161,42 +153,17 @@ function App() {
     }
   };
   
-  const handleCursor = (cursorData) => {
-    const ws = wsManager();
-    if (ws && connected()) {
-      ws.sendCursor(cursorData);
-    }
-  };
-  
-  const handleClear = () => {
-    const ws = wsManager();
-    if (ws && connected()) {
-      ws.sendClear();
-    }
-  };
-  
-  const handleImageUpload = async (file) => {
-    const wasm = wasmProcessor();
-    if (wasm) {
-      const processed = await wasm.processImage(file);
-      // Handle processed image
-    }
+  const handleInactive = () => {
+    // Show inactive message
+    console.log('User inactive - need to reload for new space');
   };
 
-  const handlePixelPlace = (pixelData) => {
-    const ws = wsManager();
-    if (ws && connected()) {
-      ws.send({ type: 'pixelPlace', ...pixelData });
-      setOperations(prev => prev + 1);
-    }
-  };
-  
   return (
     <div class="app">
       <header class="header">
         <h1 class="title">
-          <span class="logo">⚡</span>
-          SolidJS Real-Time Canvas
+          <span class="logo">🌍</span>
+          World Canvas - Draw Together
         </h1>
         
         <Stats
@@ -218,108 +185,50 @@ function App() {
             setColor={setColor}
             brushSize={brushSize()}
             setBrushSize={setBrushSize}
-            webglEnabled={webglEnabled()}
-            setWebglEnabled={setWebglEnabled}
-            onClear={handleClear}
-            onImageUpload={handleImageUpload}
+            webglEnabled={false}
+            setWebglEnabled={() => {}}
+            onClear={() => {}}
+            onImageUpload={() => {}}
           />
+          
+          <div class="users-panel">
+            <h3>Active Artists ({users().size})</h3>
+            <div class="users-list" style={{ 'max-height': '400px', 'overflow-y': 'auto' }}>
+              <For each={Array.from(users().values())}>
+                {(user) => (
+                  <div class={`user-item ${user.isMe ? 'me' : ''}`}>
+                    <div 
+                      class="user-avatar" 
+                      style={{ 
+                        'background-color': user.color,
+                        color: getContrastColor(user.color)
+                      }}
+                    >
+                      {user.name.split(' ').map(n => n[0]).join('')}
+                    </div>
+                    <div class="user-info">
+                      <div class="user-name">{user.name}</div>
+                      <div class="user-status">{user.isMe ? 'You' : 'Drawing'}</div>
+                    </div>
+                    <div class="user-dot" />
+                  </div>
+                )}
+              </For>
+            </div>
+          </div>
         </div>
         
         <div class="canvas-container">
           <div class="canvas-wrapper">
-            <Show when={canvasMode() === 'classic'}>
-              <Canvas
-                tool={tool()}
-                color={color()}
-                brushSize={brushSize()}
-                webglEnabled={webglEnabled()}
-                onDraw={handleDraw}
-                onCursor={handleCursor}
-                setLatency={setLatency}
-                wsManager={wsManager()}
-                wasmProcessor={wasmProcessor()}
-                currentUser={currentUser()}
-                users={users()}
-              />
-            </Show>
-            <Show when={canvasMode() === 'infinite'}>
-              <InfiniteCanvas
-                tool={tool()}
-                color={color()}
-                brushSize={brushSize()}
-                onDraw={handleDraw}
-                onCursor={handleCursor}
-                setLatency={setLatency}
-                wsManager={wsManager()}
-                currentUser={currentUser()}
-                users={users()}
-                navigateTo={navigateTo()}
-              />
-            </Show>
-            <Show when={canvasMode() === 'pixel'}>
-              <PixelCanvas
-                color={color()}
-                wsManager={wsManager()}
-                currentUser={currentUser()}
-                users={users()}
-                onPixelPlace={handlePixelPlace}
-              />
-            </Show>
-          </div>
-        </div>
-        
-        <div class="users-panel">
-          <div class="canvas-mode-selector">
-            <button 
-              class={`mode-btn ${canvasMode() === 'classic' ? 'active' : ''}`}
-              onClick={() => setCanvasMode('classic')}
-            >
-              Classic
-            </button>
-            <button 
-              class={`mode-btn ${canvasMode() === 'infinite' ? 'active' : ''}`}
-              onClick={() => setCanvasMode('infinite')}
-            >
-              Infinite
-            </button>
-            <button 
-              class={`mode-btn ${canvasMode() === 'pixel' ? 'active' : ''}`}
-              onClick={() => setCanvasMode('pixel')}
-            >
-              Pixel (r/place)
-            </button>
-          </div>
-          
-          <Show when={canvasMode() === 'infinite'}>
-            <Minimap 
-              viewport={currentUser()?.viewport}
-              users={Array.from(users().values())}
-              onNavigate={(x, y) => setNavigateTo({ x, y })}
+            <WorldCanvas
+              color={color()}
+              brushSize={brushSize()}
+              onDraw={handleDraw}
+              setLatency={setLatency}
+              wsManager={wsManager()}
+              currentUser={currentUser()}
+              onInactive={handleInactive}
             />
-          </Show>
-          
-          <h3>Users in Room</h3>
-          <div class="users-list" style={{ 'max-height': '300px', 'overflow-y': 'auto' }}>
-            <For each={Array.from(users().values())}>
-              {(user) => (
-                <div class={`user-item ${user.isMe ? 'me' : ''}`}>
-                  <div 
-                    class="user-avatar" 
-                    style={{ 
-                      'background-color': user.color,
-                      color: getContrastColor(user.color)
-                    }}
-                  >
-                    {user.name.split(' ').map(n => n[0]).join('')}
-                  </div>
-                  <div class="user-info">
-                    <div class="user-name">{user.name}</div>
-                    <div class="user-status">{user.isMe ? 'You' : 'Connected'}</div>
-                  </div>
-                  <div class="user-dot" />
-                </div>
-              )}
-            </For>
           </div>
         </div>
       </main>
