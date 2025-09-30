@@ -1,5 +1,5 @@
 import { createSignal, onMount, onCleanup, createEffect, For } from 'solid-js';
-import { WorldCanvas } from './components/WorldCanvas';
+import { SimpleWorldCanvas } from './components/SimpleWorldCanvas';
 import { Controls } from './components/Controls';
 import { Stats } from './components/Stats';
 import { Minimap } from './components/Minimap';
@@ -225,31 +225,15 @@ function App() {
         
         <div class="canvas-container">
           <div class="canvas-wrapper">
-            <WorldCanvas
+            <SimpleWorldCanvas
               color={color()}
               brushSize={brushSize()}
               onDraw={handleDraw}
-              setLatency={setLatency}
-              wsManager={wsManager()}
-              currentUser={currentUser()}
-              onInactive={handleInactive}
-              onCanvasReady={setCanvasAPI}
+              onReady={setCanvasAPI}
             />
           </div>
         </div>
         
-        <div class="right-panel">
-          <Minimap
-            viewport={() => canvasAPI()?.getViewport()}
-            chunkManager={canvasAPI()?.getChunkManager()}
-            users={users}
-            onNavigate={(x, y) => canvasAPI()?.navigate(x, y)}
-          />
-          
-          <NavigationControls
-            canvasAPI={() => canvasAPI()}
-          />
-        </div>
       </main>
     </div>
   );

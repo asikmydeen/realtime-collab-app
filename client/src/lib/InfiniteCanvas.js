@@ -131,10 +131,12 @@ export class ViewportController {
     this.viewport = {
       x: 0,
       y: 0,
-      width: canvas.width,
-      height: canvas.height,
+      width: canvas.width || 800,
+      height: canvas.height || 600,
       zoom: 1
     };
+
+    console.log('ViewportController initialized - canvas size:', canvas.width, 'x', canvas.height);
 
     // Pan state
     this.isPanning = false;
@@ -144,6 +146,12 @@ export class ViewportController {
     // Performance
     this.rafId = null;
     this.needsRedraw = true;
+    
+    // Force initial render
+    setTimeout(() => {
+      this.needsRedraw = true;
+      console.log('Forcing initial render');
+    }, 100);
   }
 
   worldToScreen(worldX, worldY) {
@@ -186,8 +194,12 @@ export class ViewportController {
     const ctx = this.ctx;
     const viewport = this.viewport;
 
-    // Clear canvas
-    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    // Clear canvas with a subtle background
+    ctx.fillStyle = '#fafafa';
+    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    
+    // Draw grid pattern
+    this.drawGrid();
 
     // Get visible chunks
     const visibleChunks = this.chunkManager.getVisibleChunks(viewport);
@@ -223,6 +235,60 @@ export class ViewportController {
     }
 
     this.needsRedraw = false;
+  }
+
+  drawGrid() {
+    const ctx = this.ctx;
+    const viewport = this.viewport;
+    const gridSize = 50;
+    
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.05)';
+    ctx.lineWidth = 1;
+    
+    // Calculate visible grid lines
+    const startX = Math.floor(viewport.x / gridSize) * gridSize;
+    const endX = startX + viewport.width / viewport.zoom + gridSize;
+    const startY = Math.floor(viewport.y / gridSize) * gridSize;
+    const endY = startY + viewport.height / viewport.zoom + gridSize;
+    
+    // Vertical lines
+    for (let x = startX; x <= endX; x += gridSize) {
+      const screenX = (x - viewport.x) * viewport.zoom;
+      ctx.beginPath();
+      ctx.moveTo(screenX, 0);
+      ctx.lineTo(screenX, viewport.height);
+      ctx.stroke();
+    }
+    
+    // Horizontal lines
+    for (let y = startY; y <= endY; y += gridSize) {
+      const screenY = (y - viewport.y) * viewport.zoom;
+      ctx.beginPath();
+      ctx.moveTo(0, screenY);
+      ctx.lineTo(viewport.width, screenY);
+      ctx.stroke();
+    }
+    
+    // Draw origin marker
+    if (Math.abs(viewport.x) < viewport.width && Math.abs(viewport.y) < viewport.height) {
+      const originX = -viewport.x * viewport.zoom;
+      const originY = -viewport.y * viewport.zoom;
+      
+      ctx.strokeStyle = 'rgba(255, 0, 0, 0.2)';
+      ctx.lineWidth = 2;
+      
+      // X axis
+      ctx.beginPath();
+      ctx.moveTo(0, originY);
+      ctx.lineTo(viewport.width, originY);
+      ctx.stroke();
+      
+      // Y axis
+      ctx.beginPath();
+      ctx.moveTo(originX, 0);
+      ctx.lineTo(originX, viewport.height);
+      ctx.stroke();
+    }
   }
 
   startRenderLoop() {

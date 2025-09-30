@@ -34,7 +34,9 @@ export function Minimap(props) {
   }
 
   function renderMinimap() {
-    if (!ctx) return;
+    const context = canvasRef?.getContext('2d');
+    if (!context) return;
+    ctx = context;
 
     // Clear with subtle gradient
     const gradient = ctx.createLinearGradient(0, 0, size, size);

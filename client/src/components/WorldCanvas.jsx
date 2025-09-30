@@ -28,6 +28,11 @@ export function WorldCanvas(props) {
   });
 
   onMount(() => {
+    // Basic canvas test first
+    console.log('WorldCanvas mounted');
+    console.log('Canvas ref:', canvasRef);
+    console.log('Parent element:', canvasRef?.parentElement);
+    
     setupCanvas();
     setupEventHandlers();
     setupActivityMonitoring();
@@ -41,8 +46,13 @@ export function WorldCanvas(props) {
 
   function setupCanvas() {
     const rect = canvasRef.parentElement.getBoundingClientRect();
+    console.log('Canvas setup - dimensions:', rect.width, rect.height);
+    
+    // Set canvas dimensions
     canvasRef.width = rect.width;
     canvasRef.height = rect.height;
+    canvasRef.style.width = rect.width + 'px';
+    canvasRef.style.height = rect.height + 'px';
 
     // Initialize managers
     chunkManager = new ChunkManager();
@@ -55,6 +65,15 @@ export function WorldCanvas(props) {
 
     // Start render loop
     viewportController.startRenderLoop();
+    
+    // Force a redraw after setup
+    setTimeout(() => {
+      viewportController.needsRedraw = true;
+      console.log('Canvas ready, forcing redraw');
+    }, 200);
+    
+    // Update viewport state
+    updateViewport();
     
     // Request space from server
     props.wsManager?.send({

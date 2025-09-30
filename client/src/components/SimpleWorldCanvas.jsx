@@ -1,0 +1,354 @@
+import { onMount, createSignal } from 'solid-js';
+
+export function SimpleWorldCanvas(props) {
+  let canvasRef;
+  let minimapRef;
+  
+  const [viewport, setViewport] = createSignal({ x: 0, y: 0, zoom: 1 });
+  const [isPanning, setIsPanning] = createSignal(false);
+  const [panStart, setPanStart] = createSignal({ x: 0, y: 0 });
+  
+  // Drawing state
+  const [isDrawing, setIsDrawing] = createSignal(false);
+  const [lastPos, setLastPos] = createSignal(null);
+  
+  // Drawn content storage
+  const drawnPaths = [];
+  
+  onMount(() => {
+    console.log('SimpleWorldCanvas mounted');
+    setupCanvas();
+    renderCanvas();
+    renderMinimap();
+  });
+  
+  function setupCanvas() {
+    const parent = canvasRef.parentElement;
+    canvasRef.width = parent.clientWidth;
+    canvasRef.height = parent.clientHeight;
+    console.log('Canvas size:', canvasRef.width, 'x', canvasRef.height);
+    
+    // Setup minimap
+    minimapRef.width = 200;
+    minimapRef.height = 200;
+  }
+  
+  function renderCanvas() {
+    const ctx = canvasRef.getContext('2d');
+    const vp = viewport();
+    
+    // Clear
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvasRef.width, canvasRef.height);
+    
+    // Save state
+    ctx.save();
+    
+    // Apply viewport transformation
+    ctx.translate(-vp.x, -vp.y);
+    ctx.scale(vp.zoom, vp.zoom);
+    
+    // Draw grid
+    drawGrid(ctx);
+    
+    // Draw all paths
+    ctx.strokeStyle = props.color || '#000000';
+    ctx.lineWidth = props.brushSize || 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    drawnPaths.forEach(path => {
+      ctx.strokeStyle = path.color;
+      ctx.lineWidth = path.size;
+      ctx.beginPath();
+      ctx.moveTo(path.points[0].x, path.points[0].y);
+      path.points.forEach(point => {
+        ctx.lineTo(point.x, point.y);
+      });
+      ctx.stroke();
+    });
+    
+    // Restore state
+    ctx.restore();
+    
+    // Draw UI overlay
+    drawOverlay(ctx);
+  }
+  
+  function drawGrid(ctx) {
+    const gridSize = 50;
+    const vp = viewport();
+    
+    // Calculate visible range
+    const startX = Math.floor(vp.x / gridSize) * gridSize - gridSize;
+    const endX = vp.x + canvasRef.width / vp.zoom + gridSize;
+    const startY = Math.floor(vp.y / gridSize) * gridSize - gridSize;
+    const endY = vp.y + canvasRef.height / vp.zoom + gridSize;
+    
+    ctx.strokeStyle = '#f0f0f0';
+    ctx.lineWidth = 1;
+    
+    // Vertical lines
+    for (let x = startX; x <= endX; x += gridSize) {
+      ctx.beginPath();
+      ctx.moveTo(x, startY);
+      ctx.lineTo(x, endY);
+      ctx.stroke();
+    }
+    
+    // Horizontal lines
+    for (let y = startY; y <= endY; y += gridSize) {
+      ctx.beginPath();
+      ctx.moveTo(startX, y);
+      ctx.lineTo(endX, y);
+      ctx.stroke();
+    }
+    
+    // Origin lines
+    ctx.strokeStyle = '#ff000020';
+    ctx.lineWidth = 2;
+    
+    ctx.beginPath();
+    ctx.moveTo(0, startY);
+    ctx.lineTo(0, endY);
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.moveTo(startX, 0);
+    ctx.lineTo(endX, 0);
+    ctx.stroke();
+  }
+  
+  function drawOverlay(ctx) {
+    const vp = viewport();
+    
+    // Position indicator
+    ctx.fillStyle = '#000000';
+    ctx.font = '14px Arial';
+    ctx.fillText(`Position: (${Math.round(vp.x)}, ${Math.round(vp.y)}) Zoom: ${vp.zoom.toFixed(2)}x`, 10, 25);
+  }
+  
+  function renderMinimap() {
+    const ctx = minimapRef.getContext('2d');
+    const size = 200;
+    const worldSize = 5000;
+    const vp = viewport();
+    
+    // Clear
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(0, 0, size, size);
+    
+    // Grid
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i <= 10; i++) {
+      const pos = (i / 10) * size;
+      ctx.beginPath();
+      ctx.moveTo(pos, 0);
+      ctx.lineTo(pos, size);
+      ctx.moveTo(0, pos);
+      ctx.lineTo(size, pos);
+      ctx.stroke();
+    }
+    
+    // Draw content
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    drawnPaths.forEach(path => {
+      ctx.beginPath();
+      path.points.forEach((point, i) => {
+        const x = ((point.x + worldSize/2) / worldSize) * size;
+        const y = ((point.y + worldSize/2) / worldSize) * size;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    });
+    
+    // Viewport rect
+    const vpX = ((vp.x + worldSize/2) / worldSize) * size;
+    const vpY = ((vp.y + worldSize/2) / worldSize) * size;
+    const vpW = (canvasRef.width / vp.zoom / worldSize) * size;
+    const vpH = (canvasRef.height / vp.zoom / worldSize) * size;
+    
+    ctx.strokeStyle = '#00ff00';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(vpX, vpY, vpW, vpH);
+  }
+  
+  // Mouse handlers
+  function handleMouseDown(e) {
+    if (e.shiftKey || e.button === 1) {
+      // Pan mode
+      setIsPanning(true);
+      setPanStart({ x: e.clientX + viewport().x, y: e.clientY + viewport().y });
+    } else if (e.button === 0) {
+      // Draw mode
+      const vp = viewport();
+      const worldX = e.offsetX / vp.zoom + vp.x;
+      const worldY = e.offsetY / vp.zoom + vp.y;
+      
+      setIsDrawing(true);
+      setLastPos({ x: worldX, y: worldY });
+      
+      // Start new path
+      drawnPaths.push({
+        color: props.color || '#000000',
+        size: props.brushSize || 3,
+        points: [{ x: worldX, y: worldY }]
+      });
+      
+      props.onDraw?.({ type: 'start', x: worldX, y: worldY });
+    }
+  }
+  
+  function handleMouseMove(e) {
+    if (isPanning()) {
+      const vp = viewport();
+      setViewport({
+        x: panStart().x - e.clientX,
+        y: panStart().y - e.clientY,
+        zoom: vp.zoom
+      });
+      renderCanvas();
+      renderMinimap();
+    } else if (isDrawing()) {
+      const vp = viewport();
+      const worldX = e.offsetX / vp.zoom + vp.x;
+      const worldY = e.offsetY / vp.zoom + vp.y;
+      
+      // Add point to current path
+      const currentPath = drawnPaths[drawnPaths.length - 1];
+      currentPath.points.push({ x: worldX, y: worldY });
+      
+      props.onDraw?.({ type: 'draw', x: worldX, y: worldY });
+      
+      renderCanvas();
+      renderMinimap();
+    }
+  }
+  
+  function handleMouseUp(e) {
+    setIsPanning(false);
+    setIsDrawing(false);
+    
+    if (isDrawing()) {
+      props.onDraw?.({ type: 'end' });
+    }
+  }
+  
+  function handleWheel(e) {
+    e.preventDefault();
+    const vp = viewport();
+    
+    // Calculate zoom
+    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+    const newZoom = Math.max(0.1, Math.min(5, vp.zoom * zoomFactor));
+    
+    // Zoom towards mouse position
+    const mouseX = e.offsetX;
+    const mouseY = e.offsetY;
+    
+    // Convert mouse position to world coordinates
+    const worldX = mouseX / vp.zoom + vp.x;
+    const worldY = mouseY / vp.zoom + vp.y;
+    
+    // Calculate new viewport position to keep mouse position fixed
+    const newX = worldX - mouseX / newZoom;
+    const newY = worldY - mouseY / newZoom;
+    
+    setViewport({ x: newX, y: newY, zoom: newZoom });
+    renderCanvas();
+    renderMinimap();
+  }
+  
+  // Minimap navigation
+  function handleMinimapClick(e) {
+    const rect = minimapRef.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const worldSize = 5000;
+    const worldX = (x / 200) * worldSize - worldSize/2;
+    const worldY = (y / 200) * worldSize - worldSize/2;
+    
+    // Center viewport on clicked position
+    const vp = viewport();
+    setViewport({
+      x: worldX - canvasRef.width / vp.zoom / 2,
+      y: worldY - canvasRef.height / vp.zoom / 2,
+      zoom: vp.zoom
+    });
+    
+    renderCanvas();
+    renderMinimap();
+  }
+  
+  // Navigation functions for external use
+  props.onReady?.({
+    navigate: (x, y) => {
+      const vp = viewport();
+      setViewport({
+        x: x - canvasRef.width / vp.zoom / 2,
+        y: y - canvasRef.height / vp.zoom / 2,
+        zoom: vp.zoom
+      });
+      renderCanvas();
+      renderMinimap();
+    },
+    getViewport: () => viewport()
+  });
+  
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+      {/* Main Canvas */}
+      <canvas
+        ref={canvasRef}
+        style={{ position: 'absolute', top: 0, left: 0, cursor: isDrawing() ? 'crosshair' : (isPanning() ? 'grabbing' : 'grab') }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onWheel={handleWheel}
+      />
+      
+      {/* UI Overlay */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, 'pointer-events': 'none' }}>
+        {/* Minimap */}
+        <div style={{ 
+          position: 'absolute', 
+          top: '20px', 
+          right: '20px', 
+          background: 'rgba(0,0,0,0.8)', 
+          padding: '10px',
+          'border-radius': '8px',
+          'pointer-events': 'auto'
+        }}>
+          <h4 style={{ color: 'white', margin: '0 0 10px 0', 'font-size': '14px' }}>World Map</h4>
+          <canvas
+            ref={minimapRef}
+            style={{ border: '2px solid #444', cursor: 'pointer', display: 'block' }}
+            onClick={handleMinimapClick}
+          />
+        </div>
+        
+        {/* Controls */}
+        <div style={{
+          position: 'absolute',
+          bottom: '20px',
+          left: '20px',
+          background: 'rgba(0,0,0,0.8)',
+          color: 'white',
+          padding: '15px',
+          'border-radius': '8px',
+          'font-size': '14px',
+          'pointer-events': 'auto'
+        }}>
+          <div>🖱️ Click + Drag to draw</div>
+          <div>⇧ Shift + Drag to pan</div>
+          <div>🔍 Scroll to zoom</div>
+        </div>
+      </div>
+    </div>
+  );
+}

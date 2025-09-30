@@ -62,7 +62,7 @@ export function NavigationControls(props) {
   
   return (
     <div class="navigation-panel">
-      <h3>Navigation</h3>
+      <h3 style={{ 'font-size': '0.875rem', 'text-transform': 'uppercase', 'letter-spacing': '0.05em', 'opacity': '0.7', 'margin': '0 0 1rem 0' }}>Navigation</h3>
       
       <div class="nav-buttons">
         <button class="nav-btn-large" onClick={() => handlePan(-1, -1)}>↖</button>
