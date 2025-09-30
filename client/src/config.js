@@ -3,7 +3,5 @@ export const config = {
   wsUrl: import.meta.env.VITE_WS_URL || 
          (import.meta.env.DEV 
            ? 'ws://localhost:3001' 
-           : window.location.protocol === 'https:' 
-             ? 'wss://realtime-collab-server.glitch.me' 
-             : 'ws://localhost:3001'),
+           : 'wss://realtime-collab-server-production.up.railway.app'),
 };
