@@ -94,6 +94,20 @@ class Room {
         };
       })
     }));
+    
+    // Send pixel data for pixel canvas mode
+    const pixels = [];
+    pixelOwners.forEach((data, key) => {
+      const [x, y] = key.split(',').map(Number);
+      pixels.push({ x, y, ...data });
+    });
+    
+    if (pixels.length > 0) {
+      ws.send(JSON.stringify({
+        type: 'bulkPixelUpdate',
+        pixels
+      }));
+    }
   }
 
   removeClient(clientId) {
@@ -203,6 +217,10 @@ wss.on('connection', (ws, req) => {
           
         case 'requestChunk':
           handleChunkRequest(clientId, message.chunkId);
+          break;
+          
+        case 'pixelPlace':
+          handlePixelPlace(clientId, message);
           break;
           
         case 'ping':
@@ -490,6 +508,67 @@ async function handleInfiniteCanvasDraw(clientId, message) {
 // Cleanup on disconnect
 function cleanupInfiniteCanvas(clientId) {
   infiniteCanvas.regionManager.removeClient(clientId);
+}
+
+// Pixel Canvas Handlers
+const pixelOwners = new Map(); // pixel coordinate -> owner info
+const pixelCooldowns = new Map(); // clientId -> last placed timestamp
+
+function handlePixelPlace(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client) return;
+  
+  const { x, y, color } = message;
+  const pixelKey = `${x},${y}`;
+  
+  // Check cooldown (5 seconds)
+  const lastPlaced = pixelCooldowns.get(clientId) || 0;
+  const now = Date.now();
+  if (now - lastPlaced < 5000) {
+    client.ws.send(JSON.stringify({
+      type: 'pixelError',
+      reason: 'cooldown',
+      timeLeft: Math.ceil((5000 - (now - lastPlaced)) / 1000)
+    }));
+    return;
+  }
+  
+  // Check if pixel is already owned by someone else
+  const currentOwner = pixelOwners.get(pixelKey);
+  if (currentOwner && currentOwner.owner !== clientId) {
+    client.ws.send(JSON.stringify({
+      type: 'pixelError',
+      reason: 'owned',
+      owner: currentOwner.owner
+    }));
+    return;
+  }
+  
+  // Place the pixel
+  pixelOwners.set(pixelKey, {
+    owner: clientId,
+    color,
+    timestamp: now,
+    username: client.username
+  });
+  
+  pixelCooldowns.set(clientId, now);
+  
+  // Broadcast to all clients in the room
+  const room = client.room || 'default';
+  const roomObj = rooms.get(room);
+  if (roomObj) {
+    roomObj.broadcast({
+      type: 'pixelUpdate',
+      x,
+      y,
+      color,
+      owner: clientId,
+      timestamp: now
+    });
+  }
+  
+  console.log(`Pixel placed at (${x},${y}) by ${clientId}`);
 }
 
 // Graceful shutdown

@@ -1,5 +1,7 @@
 import { createSignal, onMount, onCleanup, createEffect, For, Show } from 'solid-js';
+import { Canvas } from './components/Canvas';
 import { InfiniteCanvas } from './components/InfiniteCanvas';
+import { PixelCanvas } from './components/PixelCanvas';
 import { Controls } from './components/Controls';
 import { Stats } from './components/Stats';
 import { Minimap } from './components/Minimap';
@@ -21,7 +23,7 @@ function App() {
   const [showControls, setShowControls] = createSignal(true);
   const [username, setUsername] = createSignal(generateUsername());
   const [navigateTo, setNavigateTo] = createSignal(null);
-  const [canvasMode, setCanvasMode] = createSignal('infinite'); // 'classic' or 'infinite'
+  const [canvasMode, setCanvasMode] = createSignal('pixel'); // 'classic', 'infinite', or 'pixel'
   
   // Performance metrics
   const [fps, setFps] = createSignal(60);
@@ -180,6 +182,14 @@ function App() {
       // Handle processed image
     }
   };
+
+  const handlePixelPlace = (pixelData) => {
+    const ws = wsManager();
+    if (ws && connected()) {
+      ws.send({ type: 'pixelPlace', ...pixelData });
+      setOperations(prev => prev + 1);
+    }
+  };
   
   return (
     <div class="app">
@@ -217,7 +227,7 @@ function App() {
         
         <div class="canvas-container">
           <div class="canvas-wrapper">
-            <Show when={canvasMode() === 'infinite'} fallback={
+            <Show when={canvasMode() === 'classic'}>
               <Canvas
                 tool={tool()}
                 color={color()}
@@ -231,7 +241,8 @@ function App() {
                 currentUser={currentUser()}
                 users={users()}
               />
-            }>
+            </Show>
+            <Show when={canvasMode() === 'infinite'}>
               <InfiniteCanvas
                 tool={tool()}
                 color={color()}
@@ -245,13 +256,38 @@ function App() {
                 navigateTo={navigateTo()}
               />
             </Show>
+            <Show when={canvasMode() === 'pixel'}>
+              <PixelCanvas
+                color={color()}
+                wsManager={wsManager()}
+                currentUser={currentUser()}
+                users={users()}
+                onPixelPlace={handlePixelPlace}
+              />
+            </Show>
           </div>
         </div>
         
         <div class="users-panel">
-          <div class="toggle" onClick={() => setCanvasMode(canvasMode() === 'infinite' ? 'classic' : 'infinite')}>
-            <div class={`toggle-switch ${canvasMode() === 'infinite' ? 'active' : ''}`} />
-            <span>Infinite Canvas</span>
+          <div class="canvas-mode-selector">
+            <button 
+              class={`mode-btn ${canvasMode() === 'classic' ? 'active' : ''}`}
+              onClick={() => setCanvasMode('classic')}
+            >
+              Classic
+            </button>
+            <button 
+              class={`mode-btn ${canvasMode() === 'infinite' ? 'active' : ''}`}
+              onClick={() => setCanvasMode('infinite')}
+            >
+              Infinite
+            </button>
+            <button 
+              class={`mode-btn ${canvasMode() === 'pixel' ? 'active' : ''}`}
+              onClick={() => setCanvasMode('pixel')}
+            >
+              Pixel (r/place)
+            </button>
           </div>
           
           <Show when={canvasMode() === 'infinite'}>

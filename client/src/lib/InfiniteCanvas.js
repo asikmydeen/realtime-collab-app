@@ -63,7 +63,16 @@ export class ChunkManager {
   }
 
   createEmptyChunk(chunkX, chunkY) {
-    const canvas = new OffscreenCanvas(CHUNK_SIZE, CHUNK_SIZE);
+    // Use regular canvas if OffscreenCanvas is not available
+    const canvas = typeof OffscreenCanvas !== 'undefined' 
+      ? new OffscreenCanvas(CHUNK_SIZE, CHUNK_SIZE)
+      : document.createElement('canvas');
+    
+    if (!canvas.width) {
+      canvas.width = CHUNK_SIZE;
+      canvas.height = CHUNK_SIZE;
+    }
+    
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, CHUNK_SIZE, CHUNK_SIZE);
