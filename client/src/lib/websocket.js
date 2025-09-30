@@ -91,8 +91,8 @@ export class WebSocketManager {
     }
   }
   
-  joinRoom(roomId) {
-    this.send({ type: 'join', room: roomId });
+  joinRoom(roomId, username) {
+    this.send({ type: 'join', room: roomId, username: username });
   }
   
   sendDraw(drawData) {

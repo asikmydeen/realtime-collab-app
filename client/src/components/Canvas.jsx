@@ -1,18 +1,21 @@
-import { onMount, onCleanup, createEffect } from 'solid-js';
+import { onMount, onCleanup, createEffect, createSignal, For, Show } from 'solid-js';
 import { WebGLRenderer } from '../lib/webgl';
+import { getContrastColor } from '../utils/userColors';
 
 export function Canvas(props) {
   let canvasRef;
+  let containerRef;
   let renderer;
   let ctx;
   let isDrawing = false;
   let lastX = 0;
   let lastY = 0;
+  const [remoteCursors, setRemoteCursors] = createSignal(new Map());
 
   onMount(() => {
     // Set up proper canvas dimensions
     const setupCanvas = () => {
-      const rect = canvasRef.getBoundingClientRect();
+      const rect = containerRef.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
       
       // Set actual canvas size accounting for device pixel ratio
@@ -59,9 +62,27 @@ export function Canvas(props) {
       ws.on('draw', handleRemoteDraw);
       ws.on('clear', handleClear);
       ws.on('init', handleInit);
+      ws.on('cursor', handleRemoteCursor);
       
       onCleanup(() => {
         // Clean up listeners if needed
+      });
+    }
+  });
+
+  // Track remote cursors
+  createEffect(() => {
+    const users = props.users;
+    if (users) {
+      // Clean up cursors for disconnected users
+      setRemoteCursors(prev => {
+        const newCursors = new Map(prev);
+        newCursors.forEach((cursor, userId) => {
+          if (!users.has(userId)) {
+            newCursors.delete(userId);
+          }
+        });
+        return newCursors;
       });
     }
   });
@@ -72,6 +93,21 @@ export function Canvas(props) {
     if (data.history && data.history.length > 0) {
       data.history.forEach(op => {
         drawLine(op.x1, op.y1, op.x2, op.y2, op.color, op.size);
+      });
+    }
+  }
+
+  function handleRemoteCursor(data) {
+    if (data.clientId && props.currentUser && data.clientId !== props.currentUser.id) {
+      setRemoteCursors(prev => {
+        const newCursors = new Map(prev);
+        newCursors.set(data.clientId, {
+          x: data.x,
+          y: data.y,
+          color: data.color,
+          name: data.name
+        });
+        return newCursors;
       });
     }
   }
@@ -159,11 +195,13 @@ export function Canvas(props) {
       lastY = pos.y;
     }
 
-    // Send cursor position
+    // Send cursor position relative to canvas
+    const rect = containerRef.getBoundingClientRect();
     props.onCursor({
-      x: e.clientX,
-      y: e.clientY,
-      color: props.color
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+      color: props.currentUser?.color || props.color,
+      name: props.currentUser?.name || 'Anonymous'
     });
   }
 
@@ -211,18 +249,10 @@ export function Canvas(props) {
   }
 
   return (
-    <div class="canvas-container">
+    <div ref={containerRef} style={{ position: 'relative', width: '100%', height: '100%' }}>
       <canvas
         ref={canvasRef}
-        class="canvas"
-        style={{
-          width: '800px',
-          height: '600px',
-          background: 'white',
-          borderRadius: '16px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-          cursor: 'crosshair'
-        }}
+        style={{ cursor: 'crosshair' }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -231,6 +261,41 @@ export function Canvas(props) {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       />
+      
+      {/* Remote Cursors */}
+      <div class="remote-cursors">
+        <For each={Array.from(remoteCursors().entries())}>
+          {([userId, cursor]) => {
+            const user = props.users?.get(userId);
+            return (
+              <Show when={user}>
+                <div 
+                  class="cursor"
+                  style={{
+                    left: `${cursor.x}px`,
+                    top: `${cursor.y}px`,
+                    transform: 'translate(-50%, -50%)'
+                  }}
+                >
+                  <div 
+                    class="cursor-dot" 
+                    style={{ 'background-color': user.color }}
+                  />
+                  <div 
+                    class="cursor-label"
+                    style={{ 
+                      'background-color': user.color,
+                      color: getContrastColor(user.color)
+                    }}
+                  >
+                    {user.name}
+                  </div>
+                </div>
+              </Show>
+            );
+          }}
+        </For>
+      </div>
     </div>
   );
 }

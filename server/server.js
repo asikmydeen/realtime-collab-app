@@ -81,7 +81,14 @@ class Room {
       cursors: Array.from(this.cursors.entries()).map(([id, data]) => ({
         id,
         ...data
-      }))
+      })),
+      users: Array.from(this.clients).map(id => {
+        const client = clients.get(id);
+        return {
+          id,
+          username: client?.username || `User ${id.slice(-4)}`
+        };
+      })
     }));
   }
 
@@ -167,7 +174,7 @@ wss.on('connection', (ws, req) => {
       
       switch (message.type) {
         case 'join':
-          handleJoinRoom(clientId, message.room || 'default');
+          handleJoinRoom(clientId, message.room || 'default', message.username);
           break;
           
         case 'draw':
@@ -236,7 +243,7 @@ wss.on('connection', (ws, req) => {
 });
 
 // Message handlers
-function handleJoinRoom(clientId, roomId) {
+function handleJoinRoom(clientId, roomId, username) {
   const client = clients.get(clientId);
   if (!client) return;
   
@@ -258,10 +265,14 @@ function handleJoinRoom(clientId, roomId) {
   room.addClient(clientId, client.ws);
   client.room = roomId;
   
+  // Store username with client
+  client.username = username || `User ${clientId.slice(-4)}`;
+  
   // Notify others
   room.broadcast({
     type: 'userJoined',
     clientId,
+    username: client.username,
     totalUsers: room.clients.size
   }, clientId);
   

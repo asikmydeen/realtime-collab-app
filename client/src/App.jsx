@@ -5,16 +5,20 @@ import { Stats } from './components/Stats';
 import { WebSocketManager } from './lib/websocket';
 import { WasmProcessor } from './lib/wasm';
 import { config } from './config';
+import { getUserColor, generateUsername, getContrastColor } from './utils/userColors';
 
 function App() {
   // State management
   const [connected, setConnected] = createSignal(false);
   const [room, setRoom] = createSignal('default');
-  const [users, setUsers] = createSignal([]);
+  const [users, setUsers] = createSignal(new Map());
+  const [currentUser, setCurrentUser] = createSignal(null);
   const [tool, setTool] = createSignal('pen');
   const [color, setColor] = createSignal('#4ade80');
   const [brushSize, setBrushSize] = createSignal(5);
   const [webglEnabled, setWebglEnabled] = createSignal(true);
+  const [showControls, setShowControls] = createSignal(true);
+  const [username, setUsername] = createSignal(generateUsername());
   
   // Performance metrics
   const [fps, setFps] = createSignal(60);
@@ -38,7 +42,24 @@ function App() {
     
     ws.on('connected', () => {
       setConnected(true);
-      ws.joinRoom(room());
+      ws.joinRoom(room(), username());
+    });
+    
+    ws.on('welcome', (data) => {
+      const userIndex = users().size;
+      const userColor = getUserColor(userIndex);
+      const user = {
+        id: data.clientId,
+        name: username(),
+        color: userColor,
+        isMe: true
+      };
+      setCurrentUser(user);
+      setUsers(prev => {
+        const newUsers = new Map(prev);
+        newUsers.set(data.clientId, user);
+        return newUsers;
+      });
     });
     
     ws.on('disconnected', () => {
@@ -46,15 +67,51 @@ function App() {
     });
     
     ws.on('userJoined', (data) => {
-      setUsers(prev => [...prev, data.clientId]);
+      const userIndex = users().size;
+      const userColor = getUserColor(userIndex);
+      setUsers(prev => {
+        const newUsers = new Map(prev);
+        newUsers.set(data.clientId, {
+          id: data.clientId,
+          name: data.username || `User ${data.clientId.slice(-4)}`,
+          color: userColor,
+          isMe: false
+        });
+        return newUsers;
+      });
     });
     
     ws.on('userLeft', (data) => {
-      setUsers(prev => prev.filter(id => id !== data.clientId));
+      setUsers(prev => {
+        const newUsers = new Map(prev);
+        newUsers.delete(data.clientId);
+        return newUsers;
+      });
     });
     
     ws.on('latency', (value) => {
       setNetworkLatency(value);
+    });
+    
+    ws.on('init', (data) => {
+      // Add existing users from the room
+      if (data.users) {
+        data.users.forEach((user, index) => {
+          if (user.id !== ws.clientId) {
+            const userColor = getUserColor(users().size);
+            setUsers(prev => {
+              const newUsers = new Map(prev);
+              newUsers.set(user.id, {
+                id: user.id,
+                name: user.username || `User ${user.id.slice(-4)}`,
+                color: userColor,
+                isMe: false
+              });
+              return newUsers;
+            });
+          }
+        });
+      }
     });
     
     // Set the WebSocket manager before connecting
@@ -135,45 +192,68 @@ function App() {
           latency={latency()}
           networkLatency={networkLatency()}
           connected={connected()}
-          users={users().length}
+          users={users().size}
         />
       </header>
       
       <main class="main">
-        <Controls
-          tool={tool()}
-          setTool={setTool}
-          color={color()}
-          setColor={setColor}
-          brushSize={brushSize()}
-          setBrushSize={setBrushSize}
-          webglEnabled={webglEnabled()}
-          setWebglEnabled={setWebglEnabled}
-          onClear={handleClear}
-          onImageUpload={handleImageUpload}
-        />
+        <div class="controls-panel">
+          <Controls
+            tool={tool()}
+            setTool={setTool}
+            color={color()}
+            setColor={setColor}
+            brushSize={brushSize()}
+            setBrushSize={setBrushSize}
+            webglEnabled={webglEnabled()}
+            setWebglEnabled={setWebglEnabled}
+            onClear={handleClear}
+            onImageUpload={handleImageUpload}
+          />
+        </div>
         
-        <Canvas
-          tool={tool()}
-          color={color()}
-          brushSize={brushSize()}
-          webglEnabled={webglEnabled()}
-          onDraw={handleDraw}
-          onCursor={handleCursor}
-          setLatency={setLatency}
-          wsManager={wsManager()}
-          wasmProcessor={wasmProcessor()}
-        />
+        <div class="canvas-container">
+          <div class="canvas-wrapper">
+            <Canvas
+              tool={tool()}
+              color={color()}
+              brushSize={brushSize()}
+              webglEnabled={webglEnabled()}
+              onDraw={handleDraw}
+              onCursor={handleCursor}
+              setLatency={setLatency}
+              wsManager={wsManager()}
+              wasmProcessor={wasmProcessor()}
+              currentUser={currentUser()}
+              users={users()}
+            />
+          </div>
+        </div>
         
         <div class="users-panel">
           <h3>Users in Room</h3>
-          <For each={users()}>
-            {(userId) => (
-              <div class="user-item">
-                {userId.slice(-4)}
-              </div>
-            )}
-          </For>
+          <div class="users-list">
+            <For each={Array.from(users().values())}>
+              {(user) => (
+                <div class={`user-item ${user.isMe ? 'me' : ''}`}>
+                  <div 
+                    class="user-avatar" 
+                    style={{ 
+                      'background-color': user.color,
+                      color: getContrastColor(user.color)
+                    }}
+                  >
+                    {user.name.split(' ').map(n => n[0]).join('')}
+                  </div>
+                  <div class="user-info">
+                    <div class="user-name">{user.name}</div>
+                    <div class="user-status">{user.isMe ? 'You' : 'Connected'}</div>
+                  </div>
+                  <div class="user-dot" />
+                </div>
+              )}
+            </For>
+          </div>
         </div>
       </main>
     </div>
