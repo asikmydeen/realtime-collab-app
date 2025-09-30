@@ -230,6 +230,8 @@ function App() {
               brushSize={brushSize()}
               onDraw={handleDraw}
               onReady={setCanvasAPI}
+              wsManager={wsManager()}
+              currentUser={currentUser()}
             />
           </div>
         </div>

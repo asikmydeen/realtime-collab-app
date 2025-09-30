@@ -152,6 +152,7 @@ export function Minimap(props) {
       ctx.fillStyle = 'rgba(74, 222, 128, 0.1)';
       ctx.fillRect(x, y, w, h);
     }
+  }
 
   function updateWorldBounds() {
     if (!props.chunkManager) return;

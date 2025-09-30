@@ -1,4 +1,4 @@
-import { onMount, createSignal } from 'solid-js';
+import { onMount, createSignal, createEffect, onCleanup } from 'solid-js';
 
 export function SimpleWorldCanvas(props) {
   let canvasRef;
@@ -14,13 +14,97 @@ export function SimpleWorldCanvas(props) {
   
   // Drawn content storage
   const drawnPaths = [];
+  const remotePaths = new Map(); // clientId -> current path
+  
+  // Space allocation
+  const [mySpace, setMySpace] = createSignal(null);
+  const [remoteSpaces, setRemoteSpaces] = createSignal(new Map());
   
   onMount(() => {
     console.log('SimpleWorldCanvas mounted');
     setupCanvas();
+    setupWebSocketHandlers();
     renderCanvas();
     renderMinimap();
+    
+    // Request space allocation
+    if (props.wsManager) {
+      props.wsManager.send({
+        type: 'requestSpace',
+        viewportWidth: canvasRef.width,
+        viewportHeight: canvasRef.height
+      });
+    }
   });
+  
+  function setupWebSocketHandlers() {
+    if (!props.wsManager) return;
+    const ws = props.wsManager;
+    
+    // Handle space allocation
+    ws.on('spaceAssigned', (data) => {
+      console.log('Space assigned:', data.space);
+      setMySpace(data.space);
+      
+      // Auto-navigate to assigned space
+      setTimeout(() => {
+        const space = data.space;
+        const centerX = space.x + space.width / 2;
+        const centerY = space.y + space.height / 2;
+        
+        setViewport({
+          x: centerX - canvasRef.width / 2,
+          y: centerY - canvasRef.height / 2,
+          zoom: 1
+        });
+        
+        renderCanvas();
+        renderMinimap();
+      }, 500);
+    });
+    
+    // Handle remote drawing
+    ws.on('remoteDraw', (data) => {
+      switch(data.type) {
+        case 'start':
+          remotePaths.set(data.clientId, {
+            color: data.color || '#000000',
+            size: data.size || 3,
+            points: [{ x: data.x, y: data.y }]
+          });
+          break;
+          
+        case 'draw':
+          const path = remotePaths.get(data.clientId);
+          if (path) {
+            path.points.push({ x: data.x, y: data.y });
+          }
+          break;
+          
+        case 'end':
+          const finishedPath = remotePaths.get(data.clientId);
+          if (finishedPath && finishedPath.points.length > 1) {
+            drawnPaths.push(finishedPath);
+          }
+          remotePaths.delete(data.clientId);
+          break;
+      }
+      
+      renderCanvas();
+      renderMinimap();
+    });
+    
+    // Handle space updates
+    ws.on('spaceUpdate', (data) => {
+      const spaces = new Map();
+      data.spaces.forEach(space => {
+        spaces.set(space.userId, space);
+      });
+      setRemoteSpaces(spaces);
+      renderCanvas();
+      renderMinimap();
+    });
+  }
   
   function setupCanvas() {
     const parent = canvasRef.parentElement;
@@ -51,6 +135,9 @@ export function SimpleWorldCanvas(props) {
     // Draw grid
     drawGrid(ctx);
     
+    // Draw space boundaries
+    drawSpaces(ctx);
+    
     // Draw all paths
     ctx.strokeStyle = props.color || '#000000';
     ctx.lineWidth = props.brushSize || 3;
@@ -66,6 +153,20 @@ export function SimpleWorldCanvas(props) {
         ctx.lineTo(point.x, point.y);
       });
       ctx.stroke();
+    });
+    
+    // Draw active remote paths
+    remotePaths.forEach((path, clientId) => {
+      ctx.strokeStyle = path.color;
+      ctx.lineWidth = path.size;
+      ctx.beginPath();
+      if (path.points.length > 0) {
+        ctx.moveTo(path.points[0].x, path.points[0].y);
+        path.points.forEach(point => {
+          ctx.lineTo(point.x, point.y);
+        });
+        ctx.stroke();
+      }
     });
     
     // Restore state
@@ -126,6 +227,36 @@ export function SimpleWorldCanvas(props) {
     ctx.fillStyle = '#000000';
     ctx.font = '14px Arial';
     ctx.fillText(`Position: (${Math.round(vp.x)}, ${Math.round(vp.y)}) Zoom: ${vp.zoom.toFixed(2)}x`, 10, 25);
+    
+    // Show space info if assigned
+    const space = mySpace();
+    if (space) {
+      ctx.fillText(`Your space: (${Math.round(space.x)}, ${Math.round(space.y)})`, 10, 45);
+    }
+  }
+  
+  function drawSpaces(ctx) {
+    // Draw my space
+    const space = mySpace();
+    if (space) {
+      ctx.strokeStyle = '#4ade80';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(space.x, space.y, space.width, space.height);
+      
+      ctx.fillStyle = 'rgba(74, 222, 128, 0.05)';
+      ctx.fillRect(space.x, space.y, space.width, space.height);
+    }
+    
+    // Draw remote spaces
+    remoteSpaces().forEach((remoteSpace, userId) => {
+      if (remoteSpace.userId !== props.currentUser?.id) {
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+        ctx.strokeRect(remoteSpace.x, remoteSpace.y, remoteSpace.width, remoteSpace.height);
+        ctx.setLineDash([]);
+      }
+    });
   }
   
   function renderMinimap() {
@@ -199,6 +330,9 @@ export function SimpleWorldCanvas(props) {
       });
       
       props.onDraw?.({ type: 'start', x: worldX, y: worldY });
+      
+      // Send activity update
+      props.wsManager?.send({ type: 'activity', isDrawing: true });
     }
   }
   
@@ -283,6 +417,20 @@ export function SimpleWorldCanvas(props) {
     renderCanvas();
     renderMinimap();
   }
+  
+  // Activity monitoring
+  let activityInterval;
+  onMount(() => {
+    activityInterval = setInterval(() => {
+      props.wsManager?.send({ type: 'activity', isDrawing: false });
+    }, 30000); // Every 30 seconds
+  });
+  
+  onCleanup(() => {
+    if (activityInterval) clearInterval(activityInterval);
+    // Release space on cleanup
+    props.wsManager?.send({ type: 'releaseSpace' });
+  });
   
   // Navigation functions for external use
   props.onReady?.({
