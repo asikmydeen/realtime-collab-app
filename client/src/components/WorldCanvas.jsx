@@ -12,10 +12,20 @@ export function WorldCanvas(props) {
   const [mySpace, setMySpace] = createSignal(null);
   const [isActive, setIsActive] = createSignal(true);
   const [hasDrawn, setHasDrawn] = createSignal(false);
+  const [viewport, setViewport] = createSignal({ x: 0, y: 0, width: 800, height: 600, zoom: 1 });
   
   let lastActivityTime = Date.now();
   let activityCheckInterval;
   let isFirstLoad = true;
+
+  // Expose methods for parent component
+  createEffect(() => {
+    props.onCanvasReady?.({
+      navigate: navigateToPosition,
+      getViewport: () => viewport(),
+      getChunkManager: () => chunkManager
+    });
+  });
 
   onMount(() => {
     setupCanvas();
@@ -61,14 +71,59 @@ export function WorldCanvas(props) {
       const centerX = space.x + space.width / 2;
       const centerY = space.y + space.height / 2;
       
-      viewportController.viewport.x = centerX - canvasRef.width / 2;
-      viewportController.viewport.y = centerY - canvasRef.height / 2;
-      viewportController.viewport.zoom = 1;
-      viewportController.needsRedraw = true;
+      navigateToPosition(centerX, centerY, true);
       
       // Flash border to show assigned area
-      flashSpaceBorder();
+      setTimeout(() => flashSpaceBorder(), 500);
     }
+  }
+
+  function navigateToPosition(worldX, worldY, animate = true) {
+    const targetX = worldX - canvasRef.width / 2;
+    const targetY = worldY - canvasRef.height / 2;
+    
+    if (animate) {
+      // Smooth animation
+      const startX = viewportController.viewport.x;
+      const startY = viewportController.viewport.y;
+      const duration = 1000;
+      const startTime = performance.now();
+      
+      function animateStep() {
+        const elapsed = performance.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Easing function
+        const eased = 1 - Math.pow(1 - progress, 3);
+        
+        viewportController.viewport.x = startX + (targetX - startX) * eased;
+        viewportController.viewport.y = startY + (targetY - startY) * eased;
+        viewportController.needsRedraw = true;
+        
+        updateViewport();
+        
+        if (progress < 1) {
+          requestAnimationFrame(animateStep);
+        }
+      }
+      
+      animateStep();
+    } else {
+      viewportController.viewport.x = targetX;
+      viewportController.viewport.y = targetY;
+      viewportController.needsRedraw = true;
+      updateViewport();
+    }
+  }
+
+  function updateViewport() {
+    setViewport({
+      x: viewportController.viewport.x,
+      y: viewportController.viewport.y,
+      width: viewportController.viewport.width,
+      height: viewportController.viewport.height,
+      zoom: viewportController.viewport.zoom
+    });
   }
 
   function flashSpaceBorder() {
@@ -164,9 +219,19 @@ export function WorldCanvas(props) {
 
     // Pan with middle mouse or shift+drag
     viewportController.setupEventHandlers();
+    
+    // Override viewport controller's pan handler to update our state
+    const originalPan = viewportController.pan.bind(viewportController);
+    viewportController.pan = function(deltaX, deltaY) {
+      originalPan(deltaX, deltaY);
+      updateViewport();
+    };
 
-    // Track activity
-    canvasRef.addEventListener('wheel', () => updateActivity());
+    // Track activity and viewport changes
+    canvasRef.addEventListener('wheel', (e) => {
+      updateActivity();
+      setTimeout(updateViewport, 10);
+    });
     setInterval(() => {
       if (hasMoved) {
         updateActivity();
@@ -258,10 +323,31 @@ export function WorldCanvas(props) {
     });
 
     ws.on('remoteDraw', (data) => {
-      if (data.type === 'draw' && data.lastX !== undefined) {
-        drawing.lastPos = { x: data.lastX, y: data.lastY };
-        drawing.draw(data.x, data.y, data.color, data.size);
-        drawing.lastPos = null;
+      // Handle different draw types
+      switch(data.type) {
+        case 'start':
+          // Show drawing indicator
+          showDrawingIndicator(data.clientId, data.x, data.y, data.color);
+          break;
+          
+        case 'draw':
+          // Update drawing position
+          if (data.lastX !== undefined) {
+            drawing.lastPos = { x: data.lastX, y: data.lastY };
+          } else {
+            drawing.lastPos = { x: data.x, y: data.y };
+          }
+          drawing.draw(data.x, data.y, data.color, data.size);
+          drawing.lastPos = null;
+          
+          // Update indicator position
+          updateDrawingIndicator(data.clientId, data.x, data.y);
+          break;
+          
+        case 'end':
+          // Hide drawing indicator
+          hideDrawingIndicator(data.clientId);
+          break;
       }
     });
 
@@ -290,10 +376,56 @@ export function WorldCanvas(props) {
     });
   }
 
+  // Drawing indicators for remote users
+  const drawingIndicators = new Map();
+  
+  function showDrawingIndicator(userId, x, y, color) {
+    if (!drawingIndicators.has(userId)) {
+      const indicator = document.createElement('div');
+      indicator.className = 'drawing-indicator';
+      indicator.style.position = 'absolute';
+      indicator.style.pointerEvents = 'none';
+      indicator.style.zIndex = '1000';
+      canvasRef.parentElement.appendChild(indicator);
+      drawingIndicators.set(userId, indicator);
+    }
+    
+    const indicator = drawingIndicators.get(userId);
+    const screenPos = viewportController.worldToScreen(x, y);
+    
+    indicator.style.left = `${screenPos.x}px`;
+    indicator.style.top = `${screenPos.y}px`;
+    indicator.style.color = color;
+    indicator.innerHTML = `
+      <div class="drawing-ripple" style="border-color: ${color}"></div>
+      <div class="drawing-dot" style="background: ${color}"></div>
+    `;
+  }
+  
+  function updateDrawingIndicator(userId, x, y) {
+    const indicator = drawingIndicators.get(userId);
+    if (indicator) {
+      const screenPos = viewportController.worldToScreen(x, y);
+      indicator.style.left = `${screenPos.x}px`;
+      indicator.style.top = `${screenPos.y}px`;
+    }
+  }
+  
+  function hideDrawingIndicator(userId) {
+    const indicator = drawingIndicators.get(userId);
+    if (indicator) {
+      indicator.remove();
+      drawingIndicators.delete(userId);
+    }
+  }
+
   onCleanup(() => {
     clearInterval(activityCheckInterval);
     viewportController.stopRenderLoop();
     props.wsManager?.send({ type: 'releaseSpace' });
+    
+    // Clean up indicators
+    drawingIndicators.forEach(indicator => indicator.remove());
   });
 
   return (

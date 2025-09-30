@@ -2,6 +2,8 @@ import { createSignal, onMount, onCleanup, createEffect, For } from 'solid-js';
 import { WorldCanvas } from './components/WorldCanvas';
 import { Controls } from './components/Controls';
 import { Stats } from './components/Stats';
+import { Minimap } from './components/Minimap';
+import { NavigationControls } from './components/NavigationControls';
 import { WebSocketManager } from './lib/websocket';
 import { WasmProcessor } from './lib/wasm';
 import { config } from './config';
@@ -26,6 +28,9 @@ function App() {
   // WebSocket and WASM managers
   const [wsManager, setWsManager] = createSignal(null);
   const [wasmProcessor, setWasmProcessor] = createSignal(null);
+  
+  // Canvas API
+  const [canvasAPI, setCanvasAPI] = createSignal(null);
   
   onMount(async () => {
     // Initialize WebAssembly
@@ -228,8 +233,22 @@ function App() {
               wsManager={wsManager()}
               currentUser={currentUser()}
               onInactive={handleInactive}
+              onCanvasReady={setCanvasAPI}
             />
           </div>
+        </div>
+        
+        <div class="right-panel">
+          <Minimap
+            viewport={() => canvasAPI()?.getViewport()}
+            chunkManager={canvasAPI()?.getChunkManager()}
+            users={users}
+            onNavigate={(x, y) => canvasAPI()?.navigate(x, y)}
+          />
+          
+          <NavigationControls
+            canvasAPI={() => canvasAPI()}
+          />
         </div>
       </main>
     </div>

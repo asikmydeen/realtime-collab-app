@@ -658,6 +658,23 @@ function handleWorldCanvasDraw(clientId, message) {
   
   totalOperations++;
   
+  // Store last position for smooth line drawing
+  if (message.type === 'draw') {
+    if (!client.lastDrawPos) {
+      client.lastDrawPos = { x: message.x, y: message.y };
+    }
+    
+    // Add last position to message
+    message.lastX = client.lastDrawPos.x;
+    message.lastY = client.lastDrawPos.y;
+    
+    // Update last position
+    client.lastDrawPos = { x: message.x, y: message.y };
+  } else if (message.type === 'end') {
+    // Clear last position on draw end
+    client.lastDrawPos = null;
+  }
+  
   // Broadcast to all clients (they handle visibility themselves)
   clients.forEach((targetClient, targetId) => {
     if (targetId !== clientId && targetClient.ws.readyState === 1) {
