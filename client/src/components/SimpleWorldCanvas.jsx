@@ -65,6 +65,8 @@ export function SimpleWorldCanvas(props) {
     
     // Handle remote drawing
     ws.on('remoteDraw', (data) => {
+      console.log('Received remoteDraw:', data);
+      
       switch(data.type) {
         case 'start':
           remotePaths.set(data.clientId, {
@@ -75,10 +77,22 @@ export function SimpleWorldCanvas(props) {
           break;
           
         case 'draw':
-          const path = remotePaths.get(data.clientId);
-          if (path) {
-            path.points.push({ x: data.x, y: data.y });
+          let path = remotePaths.get(data.clientId);
+          if (!path) {
+            // Create path if it doesn't exist (in case we missed the start)
+            path = {
+              color: data.color || '#000000',
+              size: data.size || 3,
+              points: []
+            };
+            remotePaths.set(data.clientId, path);
+            
+            // Add last position if provided
+            if (data.lastX !== undefined && data.lastY !== undefined) {
+              path.points.push({ x: data.lastX, y: data.lastY });
+            }
           }
+          path.points.push({ x: data.x, y: data.y });
           break;
           
         case 'end':
@@ -329,7 +343,13 @@ export function SimpleWorldCanvas(props) {
         points: [{ x: worldX, y: worldY }]
       });
       
-      props.onDraw?.({ type: 'start', x: worldX, y: worldY });
+      props.onDraw?.({ 
+        type: 'start', 
+        x: worldX, 
+        y: worldY,
+        color: props.color || '#000000',
+        size: props.brushSize || 3
+      });
       
       // Send activity update
       props.wsManager?.send({ type: 'activity', isDrawing: true });
@@ -355,7 +375,13 @@ export function SimpleWorldCanvas(props) {
       const currentPath = drawnPaths[drawnPaths.length - 1];
       currentPath.points.push({ x: worldX, y: worldY });
       
-      props.onDraw?.({ type: 'draw', x: worldX, y: worldY });
+      props.onDraw?.({ 
+        type: 'draw', 
+        x: worldX, 
+        y: worldY,
+        color: props.color || '#000000',
+        size: props.brushSize || 3
+      });
       
       renderCanvas();
       renderMinimap();
@@ -363,12 +389,12 @@ export function SimpleWorldCanvas(props) {
   }
   
   function handleMouseUp(e) {
-    setIsPanning(false);
-    setIsDrawing(false);
-    
     if (isDrawing()) {
       props.onDraw?.({ type: 'end' });
     }
+    
+    setIsPanning(false);
+    setIsDrawing(false);
   }
   
   function handleWheel(e) {
