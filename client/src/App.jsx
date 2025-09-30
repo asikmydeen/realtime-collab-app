@@ -33,6 +33,7 @@ function App() {
     setWasmProcessor(wasm);
     
     // Initialize WebSocket
+    console.log('WebSocket URL from config:', config.wsUrl);
     const ws = new WebSocketManager(config.wsUrl);
     
     ws.on('connected', () => {

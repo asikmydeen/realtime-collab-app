@@ -12,6 +12,7 @@ export class WebSocketManager {
 
   connect() {
     console.log('Connecting to WebSocket server...');
+    console.log('WebSocket URL:', this.url);
     this.ws = new WebSocket(this.url);
     
     this.ws.onopen = () => {
