@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { InfiniteCanvasServer } from './infiniteCanvas.js';
 import { ServerSpaceManager } from './spaceManager.js';
+import { DrawingPersistence } from './drawingPersistence.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -62,6 +63,9 @@ const infiniteCanvas = new InfiniteCanvasServer();
 
 // Space manager for world canvas
 const spaceManager = new ServerSpaceManager();
+
+// Drawing persistence
+const drawingPersistence = new DrawingPersistence(redis);
 
 // Make clients globally accessible for space manager
 global.wsClients = clients;
@@ -255,6 +259,10 @@ wss.on('connection', (ws, req) => {
           
         case 'releaseSpace':
           handleReleaseSpace(clientId);
+          break;
+          
+        case 'loadDrawings':
+          handleLoadDrawings(clientId, message);
           break;
 
         default:
@@ -460,14 +468,17 @@ setInterval(() => {
 }, 5 * 60 * 1000); // Every 5 minutes
 
 // REST endpoints
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  const drawingStats = await getDrawingStats();
+  
   res.json({
     status: 'healthy',
     clients: clients.size,
     rooms: rooms.size,
     uptime: Date.now() - startTime,
     totalOperations,
-    totalMessages
+    totalMessages,
+    drawings: drawingStats
   });
 });
 
@@ -664,23 +675,40 @@ function handleWorldCanvasDraw(clientId, message) {
   
   totalOperations++;
   
-  // Store last position for smooth line drawing
-  if (message.drawType === 'draw') {
+  // Handle drawing path tracking
+  if (message.drawType === 'start') {
+    // Start a new path
+    client.currentPath = {
+      clientId,
+      color: message.color,
+      size: message.size,
+      points: [{ x: message.x, y: message.y }]
+    };
+    client.lastDrawPos = { x: message.x, y: message.y };
+  } else if (message.drawType === 'draw') {
+    // Add point to current path
+    if (client.currentPath) {
+      client.currentPath.points.push({ x: message.x, y: message.y });
+    }
+    
     if (!client.lastDrawPos) {
       client.lastDrawPos = { x: message.x, y: message.y };
     }
     
-    // Add last position to message
+    // Add last position to message for smooth lines
     message.lastX = client.lastDrawPos.x;
     message.lastY = client.lastDrawPos.y;
     
-    // Update last position
-    client.lastDrawPos = { x: message.x, y: message.y };
-  } else if (message.drawType === 'start') {
-    // Initialize position on start
     client.lastDrawPos = { x: message.x, y: message.y };
   } else if (message.drawType === 'end') {
-    // Clear last position on draw end
+    // Save completed path
+    if (client.currentPath && client.currentPath.points.length > 1) {
+      drawingPersistence.savePath(client.currentPath).catch(err => {
+        console.error('Failed to save drawing path:', err);
+      });
+    }
+    
+    client.currentPath = null;
     client.lastDrawPos = null;
   }
   
@@ -697,12 +725,61 @@ function handleWorldCanvasDraw(clientId, message) {
         clientId,
         ...drawData  // This now excludes the original 'type' field
       };
-      console.log(`[Draw] Broadcasting to ${targetId}:`, broadcastMessage);
       targetClient.ws.send(JSON.stringify(broadcastMessage));
     }
   });
   
   console.log(`[Draw] Broadcasted to ${broadcastCount} clients`);
+}
+
+// Load drawings for viewport
+async function handleLoadDrawings(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client) return;
+  
+  const { x, y, width, height } = message.viewport || { x: -2500, y: -2500, width: 5000, height: 5000 };
+  
+  try {
+    console.log(`[Load] Loading drawings for viewport: ${x},${y} ${width}x${height}`);
+    const drawings = await drawingPersistence.loadDrawingsInViewport(x, y, width, height);
+    
+    // Send drawings in batches to avoid overwhelming the client
+    const batchSize = 50;
+    for (let i = 0; i < drawings.length; i += batchSize) {
+      const batch = drawings.slice(i, i + batchSize);
+      
+      client.ws.send(JSON.stringify({
+        type: 'drawingHistory',
+        drawings: batch,
+        batchIndex: Math.floor(i / batchSize),
+        totalBatches: Math.ceil(drawings.length / batchSize)
+      }));
+      
+      // Small delay between batches
+      if (i + batchSize < drawings.length) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    }
+    
+    console.log(`[Load] Sent ${drawings.length} drawings in ${Math.ceil(drawings.length / batchSize)} batches`);
+  } catch (error) {
+    console.error('Failed to load drawings:', error);
+    client.ws.send(JSON.stringify({
+      type: 'error',
+      message: 'Failed to load drawing history'
+    }));
+  }
+}
+
+// Get drawing statistics
+async function getDrawingStats() {
+  try {
+    const stats = await drawingPersistence.getStats();
+    return stats;
+  } catch (error) {
+    console.error('Failed to get drawing stats:', error);
+    return { totalDrawings: 0, storageType: 'unknown' };
+  }
 }
 
 // Graceful shutdown

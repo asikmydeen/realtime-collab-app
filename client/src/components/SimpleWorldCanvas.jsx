@@ -54,6 +54,9 @@ export function SimpleWorldCanvas(props) {
           viewportWidth: canvasRef.width,
           viewportHeight: canvasRef.height
         });
+        
+        // Also load any existing drawings in the default viewport
+        loadDrawingsForCurrentView();
       }, 100);
     }
   });
@@ -86,6 +89,9 @@ export function SimpleWorldCanvas(props) {
         
         renderCanvas();
         renderMinimap();
+        
+        // Request drawing history for the area
+        loadDrawingsForCurrentView();
       }, 500);
     });
     
@@ -147,8 +153,26 @@ export function SimpleWorldCanvas(props) {
       renderMinimap();
     });
     
+    // Handle drawing history
+    const cleanup4 = ws.on('drawingHistory', (data) => {
+      console.log(`[History] Received batch ${data.batchIndex + 1}/${data.totalBatches} with ${data.drawings.length} drawings`);
+      
+      // Add historical drawings to our paths
+      data.drawings.forEach(drawing => {
+        const path = {
+          color: drawing.color,
+          size: drawing.size,
+          points: drawing.points
+        };
+        drawnPaths.push(path);
+      });
+      
+      renderCanvas();
+      renderMinimap();
+    });
+    
     // Store cleanup functions
-    wsCleanups = [cleanup1, cleanup2, cleanup3];
+    wsCleanups = [cleanup1, cleanup2, cleanup3, cleanup4];
   }
   
   function setupCanvas() {
@@ -390,6 +414,7 @@ export function SimpleWorldCanvas(props) {
       });
       renderCanvas();
       renderMinimap();
+      checkAndLoadNewArea();
     } else if (isDrawing()) {
       const vp = viewport();
       const worldX = e.offsetX / vp.zoom + vp.x;
@@ -444,6 +469,7 @@ export function SimpleWorldCanvas(props) {
     setViewport({ x: newX, y: newY, zoom: newZoom });
     renderCanvas();
     renderMinimap();
+    checkAndLoadNewArea();
   }
   
   // Minimap navigation
@@ -466,6 +492,7 @@ export function SimpleWorldCanvas(props) {
     
     renderCanvas();
     renderMinimap();
+    checkAndLoadNewArea();
   }
   
   // Activity monitoring
@@ -482,6 +509,48 @@ export function SimpleWorldCanvas(props) {
     props.wsManager?.send({ type: 'releaseSpace' });
   });
   
+  // Load drawings for current viewport
+  function loadDrawingsForCurrentView() {
+    if (!props.wsManager || !props.wsManager.ws || props.wsManager.ws.readyState !== 1) {
+      console.warn('[Load] WebSocket not connected, skipping drawing load');
+      return;
+    }
+    
+    const vp = viewport();
+    const padding = 500; // Load extra area around viewport
+    
+    props.wsManager.send({
+      type: 'loadDrawings',
+      viewport: {
+        x: vp.x - padding,
+        y: vp.y - padding,
+        width: canvasRef.width / vp.zoom + padding * 2,
+        height: canvasRef.height / vp.zoom + padding * 2
+      }
+    });
+  }
+  
+  // Track last loaded area to avoid redundant loads
+  let lastLoadedArea = null;
+  
+  function checkAndLoadNewArea() {
+    const vp = viewport();
+    const currentArea = {
+      x: Math.floor(vp.x / 500),
+      y: Math.floor(vp.y / 500),
+      zoom: Math.floor(vp.zoom * 10)
+    };
+    
+    // Check if we've moved to a new area
+    if (!lastLoadedArea || 
+        lastLoadedArea.x !== currentArea.x || 
+        lastLoadedArea.y !== currentArea.y ||
+        lastLoadedArea.zoom !== currentArea.zoom) {
+      lastLoadedArea = currentArea;
+      loadDrawingsForCurrentView();
+    }
+  }
+  
   // Navigation functions for external use
   props.onReady?.({
     navigate: (x, y) => {
@@ -493,6 +562,7 @@ export function SimpleWorldCanvas(props) {
       });
       renderCanvas();
       renderMinimap();
+      checkAndLoadNewArea();
     },
     getViewport: () => viewport()
   });
