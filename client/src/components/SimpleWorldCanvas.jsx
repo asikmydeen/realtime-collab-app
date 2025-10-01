@@ -16,6 +16,14 @@ export function SimpleWorldCanvas(props) {
   const [drawnPaths, setDrawnPaths] = createSignal([]);
   const remotePaths = new Map(); // clientId -> current path
   
+  // Drawing throttle state
+  const drawingThrottle = {
+    lastSendTime: 0,
+    throttleMs: 50, // Send at most 20 updates per second
+    pendingPoints: [],
+    timeoutId: null
+  };
+  
   // Space allocation
   const [mySpace, setMySpace] = createSignal(null);
   const [remoteSpaces, setRemoteSpaces] = createSignal(new Map());
@@ -98,16 +106,35 @@ export function SimpleWorldCanvas(props) {
         
         renderCanvas();
         renderMinimap();
+        sendViewportUpdate();
         
         // Request drawing history for the area
         loadDrawingsForCurrentView();
       }, 500);
     });
     
+    // Handle batch messages
+    const cleanupBatch = ws.on('batch', (data) => {
+      console.log('📦 Received batch with', data.messages.length, 'messages');
+      // Process each message in the batch
+      data.messages.forEach(msg => {
+        if (msg.type === 'remoteDraw') {
+          handleRemoteDraw(msg);
+        } else if (msg.type === 'cursor') {
+          // Handle cursor update if needed
+        }
+      });
+    });
+    
     // Handle remote drawing
     const cleanup2 = ws.on('remoteDraw', (data) => {
       console.log('🎨 Received remoteDraw:', data);
       setReceivedCount(prev => prev + 1);
+      handleRemoteDraw(data);
+    });
+    
+    // Extract remote draw handling to separate function
+    function handleRemoteDraw(data) {
       
       // Use drawType instead of type
       switch(data.drawType) {
@@ -149,7 +176,7 @@ export function SimpleWorldCanvas(props) {
       
       renderCanvas();
       renderMinimap();
-    });
+    }
     
     // Handle space updates
     const cleanup3 = ws.on('spaceUpdate', (data) => {
@@ -197,7 +224,7 @@ export function SimpleWorldCanvas(props) {
     });
     
     // Store cleanup functions
-    wsCleanups = [cleanup1, cleanup2, cleanup3, cleanup4];
+    wsCleanups = [cleanup1, cleanupBatch, cleanup2, cleanup3, cleanup4];
   }
   
   function setupCanvas() {
@@ -398,6 +425,63 @@ export function SimpleWorldCanvas(props) {
     ctx.strokeRect(vpX, vpY, vpW, vpH);
   }
   
+  // Throttled drawing send function
+  function sendThrottledDraw(drawData) {
+    const now = Date.now();
+    
+    // If this is a start or end event, send immediately
+    if (drawData.drawType === 'start' || drawData.drawType === 'end') {
+      // Clear any pending points
+      if (drawingThrottle.timeoutId) {
+        clearTimeout(drawingThrottle.timeoutId);
+        drawingThrottle.timeoutId = null;
+      }
+      
+      // Send any pending points first
+      if (drawingThrottle.pendingPoints.length > 0) {
+        drawingThrottle.pendingPoints.forEach(point => {
+          props.onDraw?.(point);
+        });
+        drawingThrottle.pendingPoints = [];
+      }
+      
+      // Send the start/end event
+      props.onDraw?.(drawData);
+      drawingThrottle.lastSendTime = now;
+      return;
+    }
+    
+    // For draw events, add to pending points
+    drawingThrottle.pendingPoints.push(drawData);
+    
+    // Check if we can send immediately
+    if (now - drawingThrottle.lastSendTime >= drawingThrottle.throttleMs) {
+      // Send all pending points
+      drawingThrottle.pendingPoints.forEach(point => {
+        props.onDraw?.(point);
+      });
+      drawingThrottle.pendingPoints = [];
+      drawingThrottle.lastSendTime = now;
+      
+      // Clear any pending timeout
+      if (drawingThrottle.timeoutId) {
+        clearTimeout(drawingThrottle.timeoutId);
+        drawingThrottle.timeoutId = null;
+      }
+    } else if (!drawingThrottle.timeoutId) {
+      // Schedule a send for the remaining time
+      const remainingTime = drawingThrottle.throttleMs - (now - drawingThrottle.lastSendTime);
+      drawingThrottle.timeoutId = setTimeout(() => {
+        drawingThrottle.pendingPoints.forEach(point => {
+          props.onDraw?.(point);
+        });
+        drawingThrottle.pendingPoints = [];
+        drawingThrottle.lastSendTime = Date.now();
+        drawingThrottle.timeoutId = null;
+      }, remainingTime);
+    }
+  }
+  
   // Mouse handlers
   function handleMouseDown(e) {
     // Prevent interaction while loading
@@ -424,8 +508,8 @@ export function SimpleWorldCanvas(props) {
       };
       setDrawnPaths(prev => [...prev, newPath]);
       
-      // Don't include 'type' since sendDraw adds it
-      props.onDraw?.({ 
+      // Use throttled send for drawing
+      sendThrottledDraw({ 
         drawType: 'start', 
         x: worldX, 
         y: worldY,
@@ -451,6 +535,7 @@ export function SimpleWorldCanvas(props) {
       renderCanvas();
       renderMinimap();
       checkAndLoadNewArea();
+      scheduleViewportUpdate();
     } else if (isDrawing()) {
       const vp = viewport();
       const worldX = e.offsetX / vp.zoom + vp.x;
@@ -466,7 +551,7 @@ export function SimpleWorldCanvas(props) {
         return paths;
       });
       
-      props.onDraw?.({ 
+      sendThrottledDraw({ 
         drawType: 'draw', 
         x: worldX, 
         y: worldY,
@@ -481,7 +566,7 @@ export function SimpleWorldCanvas(props) {
   
   function handleMouseUp(e) {
     if (isDrawing()) {
-      props.onDraw?.({ drawType: 'end' });
+      sendThrottledDraw({ drawType: 'end' });
     }
     
     setIsPanning(false);
@@ -513,6 +598,7 @@ export function SimpleWorldCanvas(props) {
     renderCanvas();
     renderMinimap();
     checkAndLoadNewArea();
+    scheduleViewportUpdate();
   }
   
   // Minimap navigation
@@ -536,6 +622,35 @@ export function SimpleWorldCanvas(props) {
     renderCanvas();
     renderMinimap();
     checkAndLoadNewArea();
+    scheduleViewportUpdate();
+  }
+  
+  // Send viewport update to server
+  function sendViewportUpdate() {
+    if (!props.wsManager || !canvasRef) return;
+    
+    const vp = viewport();
+    props.wsManager.send({
+      type: 'updateViewport',
+      viewport: {
+        x: vp.x,
+        y: vp.y,
+        width: canvasRef.width / vp.zoom,
+        height: canvasRef.height / vp.zoom,
+        zoom: vp.zoom
+      }
+    });
+  }
+  
+  // Debounced viewport update
+  let viewportUpdateTimeout;
+  function scheduleViewportUpdate() {
+    if (viewportUpdateTimeout) {
+      clearTimeout(viewportUpdateTimeout);
+    }
+    viewportUpdateTimeout = setTimeout(() => {
+      sendViewportUpdate();
+    }, 200); // Send update 200ms after movement stops
   }
   
   // Activity monitoring
@@ -548,6 +663,14 @@ export function SimpleWorldCanvas(props) {
   
   onCleanup(() => {
     if (activityInterval) clearInterval(activityInterval);
+    // Clear drawing throttle timeout
+    if (drawingThrottle.timeoutId) {
+      clearTimeout(drawingThrottle.timeoutId);
+    }
+    // Clear viewport update timeout
+    if (viewportUpdateTimeout) {
+      clearTimeout(viewportUpdateTimeout);
+    }
     // Release space on cleanup
     props.wsManager?.send({ type: 'releaseSpace' });
   });

@@ -1,0 +1,19 @@
+{
+  "name": "realtime-collab-stress-test",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "node stress-test.js",
+    "test:small": "TARGET_USERS=10 node stress-test.js",
+    "test:medium": "TARGET_USERS=50 node stress-test.js",
+    "test:large": "TARGET_USERS=100 node stress-test.js",
+    "test:xlarge": "TARGET_USERS=500 node stress-test.js",
+    "test:extreme": "TARGET_USERS=1000 node stress-test.js",
+    "browser-test": "node browser-stress-test.js",
+    "analyze": "node analyze-results.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0",
+    "puppeteer": "^21.7.0"
+  }
+}

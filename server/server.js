@@ -12,6 +12,9 @@ import { dirname, join } from 'path';
 import { InfiniteCanvasServer } from './infiniteCanvas.js';
 import { ServerSpaceManager } from './spaceManager.js';
 import { DrawingPersistence } from './drawingPersistence.js';
+import ConnectionManager from './connectionManager.js';
+import MessageBatcher from './messageBatcher.js';
+import ViewportManager from './viewportManager.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -95,6 +98,21 @@ const spaceManager = new ServerSpaceManager();
 // Drawing persistence
 const drawingPersistence = new DrawingPersistence(redis);
 
+// Connection manager for handling connection queue
+const connectionManager = new ConnectionManager({
+  maxConcurrentConnections: 100,
+  connectionTimeout: 30000
+});
+
+// Message batcher for optimizing broadcasts
+const messageBatcher = new MessageBatcher({
+  batchInterval: 50,
+  maxBatchSize: 100
+});
+
+// Viewport manager for spatial filtering
+const viewportManager = new ViewportManager();
+
 // Make clients globally accessible for space manager
 global.wsClients = clients;
 
@@ -156,12 +174,21 @@ class Room {
   }
 
   broadcast(message, excludeId = null) {
-    const data = JSON.stringify(message);
     this.clients.forEach(clientId => {
       if (clientId !== excludeId) {
         const client = clients.get(clientId);
         if (client && client.ws.readyState === 1) {
-          client.ws.send(data);
+          // Use message batcher for non-critical messages
+          if (message.type === 'remoteDraw' || message.type === 'cursor') {
+            messageBatcher.addMessage(clientId, message, (data) => {
+              if (client.ws.readyState === 1) {
+                client.ws.send(data);
+              }
+            });
+          } else {
+            // Send immediately for critical messages
+            client.ws.send(JSON.stringify(message));
+          }
         }
       }
     });
@@ -187,8 +214,15 @@ class Room {
   }
 }
 
-// WebSocket connection handler
-wss.on('connection', (ws, req) => {
+// WebSocket connection handler with queue management
+wss.on('connection', async (ws, req) => {
+  // Add to connection queue
+  const connectionId = await connectionManager.addToQueue(ws, req);
+  console.log(`⏳ Connection ${connectionId} added to queue`);
+});
+
+// Handle connections after they're processed by queue
+connectionManager.on('connection', (ws, req) => {
   const clientId = uuidv4();
   const clientIp = req.socket.remoteAddress;
   
@@ -292,6 +326,10 @@ wss.on('connection', (ws, req) => {
         case 'loadDrawings':
           handleLoadDrawings(clientId, message);
           break;
+          
+        case 'updateViewport':
+          handleViewportUpdate(clientId, message);
+          break;
 
         default:
           console.log('Unknown message type:', message.type);
@@ -325,6 +363,12 @@ wss.on('connection', (ws, req) => {
         }
       }
     }
+    
+    // Clean up message batcher
+    messageBatcher.removeClient(clientId);
+    
+    // Clean up viewport manager
+    viewportManager.removeClient(clientId);
     
     clients.delete(clientId);
     cleanupInfiniteCanvas(clientId);
@@ -498,6 +542,9 @@ setInterval(() => {
 // REST endpoints
 app.get('/health', async (req, res) => {
   const drawingStats = await getDrawingStats();
+  const connectionStats = connectionManager.getStats();
+  const batcherStats = messageBatcher.getStats();
+  const viewportStats = viewportManager.getStats();
   
   res.json({
     status: 'healthy',
@@ -506,7 +553,10 @@ app.get('/health', async (req, res) => {
     uptime: Date.now() - startTime,
     totalOperations,
     totalMessages,
-    drawings: drawingStats
+    drawings: drawingStats,
+    connections: connectionStats,
+    batcher: batcherStats,
+    viewports: viewportStats
   });
 });
 
@@ -743,21 +793,42 @@ function handleWorldCanvasDraw(clientId, message) {
   // Remove the 'type' field from message before broadcasting to avoid conflicts
   const { type, ...drawData } = message;
   
-  // Broadcast to all clients (they handle visibility themselves)
+  // Broadcast to clients with viewport filtering
   let broadcastCount = 0;
-  clients.forEach((targetClient, targetId) => {
-    if (targetId !== clientId && targetClient.ws.readyState === 1) {
-      broadcastCount++;
-      const broadcastMessage = {
-        type: 'remoteDraw',
-        clientId,
-        ...drawData  // This now excludes the original 'type' field
-      };
-      targetClient.ws.send(JSON.stringify(broadcastMessage));
+  const broadcastMessage = {
+    type: 'remoteDraw',
+    clientId,
+    ...drawData  // This now excludes the original 'type' field
+  };
+  
+  // Get clients that can see this drawing
+  let visibleClients;
+  if (message.drawType === 'draw' && message.x !== undefined && message.y !== undefined) {
+    // For draw events, only send to clients who can see the point
+    visibleClients = viewportManager.getClientsInView(message.x, message.y);
+  } else if (message.drawType === 'end' && client.currentPath && client.currentPath.points.length > 0) {
+    // For end events, send to all clients who saw any part of the path
+    visibleClients = viewportManager.getClientsForPath(client.currentPath.points);
+  } else {
+    // For start events or fallback, use all clients
+    visibleClients = new Set(clients.keys());
+  }
+  
+  visibleClients.forEach(targetId => {
+    if (targetId !== clientId) {
+      const targetClient = clients.get(targetId);
+      if (targetClient && targetClient.ws.readyState === 1) {
+        broadcastCount++;
+        messageBatcher.addMessage(targetId, broadcastMessage, (data) => {
+          if (targetClient.ws.readyState === 1) {
+            targetClient.ws.send(data);
+          }
+        });
+      }
     }
   });
   
-  console.log(`[Draw] Broadcasted to ${broadcastCount} clients`);
+  console.log(`[Draw] Broadcasted to ${broadcastCount}/${clients.size - 1} visible clients`);
 }
 
 // Load drawings for viewport
@@ -822,11 +893,31 @@ async function getDrawingStats() {
   }
 }
 
+// Handle viewport update
+function handleViewportUpdate(clientId, message) {
+  if (!message.viewport) return;
+  
+  const { x, y, width, height, zoom } = message.viewport;
+  
+  viewportManager.updateViewport(clientId, {
+    x: x || 0,
+    y: y || 0,
+    width: width || 1920,
+    height: height || 1080,
+    zoom: zoom || 1
+  });
+  
+  console.log(`[Viewport] Updated for ${clientId}: ${width}x${height} at (${x}, ${y}), zoom: ${zoom}`);
+}
+
 // Graceful shutdown
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
   console.log('SIGTERM received, closing server...');
   
   clearInterval(heartbeatInterval);
+  
+  // Shutdown connection manager
+  await connectionManager.shutdown();
   
   wss.clients.forEach((ws) => {
     ws.close();
