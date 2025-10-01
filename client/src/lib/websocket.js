@@ -61,6 +61,8 @@ export class WebSocketManager {
   }
   
   handleMessage(data) {
+    console.log('[WS] Received message:', data.type, data);
+    
     switch (data.type) {
       case 'welcome':
         this.clientId = data.clientId;
@@ -77,7 +79,7 @@ export class WebSocketManager {
         break;
       
       case 'remoteDraw':
-        console.log('[WS] Received remote draw event:', data);
+        console.log('[WS] 🎨 Received remoteDraw event:', data);
         this.emit('remoteDraw', data);
         break;
       

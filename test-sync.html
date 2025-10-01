@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Sync Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: white;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+            height: calc(100vh - 40px);
+        }
+        .browser-frame {
+            flex: 1;
+            border: 2px solid #333;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .browser-header {
+            background: #2a2a2a;
+            padding: 10px;
+            border-bottom: 1px solid #333;
+        }
+        .browser-title {
+            font-size: 14px;
+            font-weight: bold;
+        }
+        iframe {
+            flex: 1;
+            width: 100%;
+            border: none;
+            background: white;
+        }
+        .instructions {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px 30px;
+            border-radius: 8px;
+            text-align: center;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div class="instructions">
+        <h3>WebSocket Sync Test</h3>
+        <p>Draw in one browser - it should appear in the other!</p>
+        <p>URL: https://realtime-collab-app.vercel.app</p>
+    </div>
+
+    <div class="container">
+        <div class="browser-frame">
+            <div class="browser-header">
+                <div class="browser-title">Browser 1</div>
+            </div>
+            <iframe src="https://realtime-collab-app.vercel.app"></iframe>
+        </div>
+        <div class="browser-frame">
+            <div class="browser-header">
+                <div class="browser-title">Browser 2</div>
+            </div>
+            <iframe src="https://realtime-collab-app.vercel.app"></iframe>
+        </div>
+    </div>
+</body>
+</html>

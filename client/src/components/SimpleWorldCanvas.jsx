@@ -49,8 +49,13 @@ export function SimpleWorldCanvas(props) {
   });
   
   function setupWebSocketHandlers() {
-    if (!props.wsManager) return;
+    if (!props.wsManager) {
+      console.error('[Canvas] No wsManager available in setupWebSocketHandlers');
+      return;
+    }
     const ws = props.wsManager;
+    
+    console.log('[Canvas] Setting up WebSocket handlers');
     
     // Handle space allocation
     ws.on('spaceAssigned', (data) => {
@@ -606,6 +611,30 @@ export function SimpleWorldCanvas(props) {
               }}
             >
               Find Drawings
+            </button>
+            <button 
+              style={{
+                padding: '5px 10px',
+                'margin-left': '5px',
+                background: '#ef4444',
+                border: 'none',
+                'border-radius': '4px',
+                cursor: 'pointer'
+              }}
+              onClick={() => {
+                // Debug: manually emit a test draw
+                console.log('[Debug] Testing remoteDraw handler...');
+                props.wsManager?.emit('remoteDraw', {
+                  clientId: 'test-client',
+                  drawType: 'start',
+                  x: 100,
+                  y: 100,
+                  color: '#ff0000',
+                  size: 10
+                });
+              }}
+            >
+              Test Draw Event
             </button>
           </div>
         </div>
