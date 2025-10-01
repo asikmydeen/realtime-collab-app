@@ -55,17 +55,22 @@ export class DrawingPersistence {
       timestamp: Date.now()
     };
     
+    console.log(`[Persist] Saving path with ${path.points.length} points to chunks:`, path.points[0], path.points[path.points.length - 1]);
+    
     const chunks = this.getPathChunks(path);
+    console.log(`[Persist] Path spans chunks:`, chunks);
     
     if (this.redis) {
       // Store in Redis
       try {
         // Store path data
         await this.redis.hSet('drawings', path.id, JSON.stringify(path));
+        console.log(`[Persist] Saved drawing ${path.id} to Redis`);
         
         // Add to spatial index
         for (const chunkKey of chunks) {
           await this.redis.sAdd(chunkKey, path.id);
+          console.log(`[Persist] Added drawing ${path.id} to chunk ${chunkKey}`);
           
           // Trim old drawings if chunk is too full
           const chunkSize = await this.redis.sCard(chunkKey);
@@ -139,6 +144,8 @@ export class DrawingPersistence {
 
   // Load drawings for a viewport
   async loadDrawingsInViewport(x, y, width, height) {
+    console.log(`[Persist] Loading drawings for viewport: ${x},${y} ${width}x${height}`);
+    
     const drawings = [];
     
     // Calculate chunks in viewport
@@ -154,11 +161,14 @@ export class DrawingPersistence {
       }
     }
     
+    console.log(`[Persist] Checking chunks:`, chunkKeys);
+    
     if (this.redis) {
       try {
         // Load from Redis
         for (const chunkKey of chunkKeys) {
           const drawingIds = await this.redis.sMembers(chunkKey);
+          console.log(`[Persist] Chunk ${chunkKey} has ${drawingIds.length} drawings`);
           
           for (const drawingId of drawingIds) {
             const drawingData = await this.redis.hGet('drawings', drawingId);
@@ -173,6 +183,7 @@ export class DrawingPersistence {
               
               if (visible) {
                 drawings.push(drawing);
+                console.log(`[Persist] Found visible drawing with ${drawing.points.length} points`);
               }
             }
           }
@@ -188,6 +199,7 @@ export class DrawingPersistence {
     // Sort by timestamp to maintain drawing order
     drawings.sort((a, b) => a.timestamp - b.timestamp);
     
+    console.log(`[Persist] Returning ${drawings.length} drawings`);
     return drawings;
   }
 

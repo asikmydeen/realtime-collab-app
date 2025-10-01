@@ -56,7 +56,10 @@ export function SimpleWorldCanvas(props) {
         });
         
         // Also load any existing drawings in the default viewport
-        loadDrawingsForCurrentView();
+        setTimeout(() => {
+          console.log('[Canvas] Loading initial drawings after space allocation...');
+          loadDrawingsForCurrentView();
+        }, 500);
       }, 100);
     }
   });
@@ -165,8 +168,10 @@ export function SimpleWorldCanvas(props) {
           points: drawing.points
         };
         drawnPaths.push(path);
+        console.log(`[History] Added path with ${path.points.length} points, color: ${path.color}`);
       });
       
+      console.log(`[History] Total paths now: ${drawnPaths.length}`);
       renderCanvas();
       renderMinimap();
     });
@@ -519,7 +524,7 @@ export function SimpleWorldCanvas(props) {
     const vp = viewport();
     const padding = 500; // Load extra area around viewport
     
-    props.wsManager.send({
+    const loadRequest = {
       type: 'loadDrawings',
       viewport: {
         x: vp.x - padding,
@@ -527,7 +532,10 @@ export function SimpleWorldCanvas(props) {
         width: canvasRef.width / vp.zoom + padding * 2,
         height: canvasRef.height / vp.zoom + padding * 2
       }
-    });
+    };
+    
+    console.log('[Canvas] Requesting drawings for viewport:', loadRequest.viewport);
+    props.wsManager.send(loadRequest);
   }
   
   // Track last loaded area to avoid redundant loads
