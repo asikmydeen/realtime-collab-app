@@ -20,21 +20,32 @@ export function SimpleWorldCanvas(props) {
   const [mySpace, setMySpace] = createSignal(null);
   const [remoteSpaces, setRemoteSpaces] = createSignal(new Map());
   
+  // Debug mode - show all received messages
+  const [debugMode, setDebugMode] = createSignal(true);
+  const [receivedCount, setReceivedCount] = createSignal(0);
+  
   onMount(() => {
     console.log('SimpleWorldCanvas mounted');
     setupCanvas();
-    setupWebSocketHandlers();
     renderCanvas();
     renderMinimap();
     
-    // Request space allocation
-    if (props.wsManager) {
-      props.wsManager.send({
-        type: 'requestSpace',
-        viewportWidth: canvasRef.width,
-        viewportHeight: canvasRef.height
-      });
-    }
+    // Wait a bit for WebSocket to be ready
+    setTimeout(() => {
+      setupWebSocketHandlers();
+      
+      // Request space allocation
+      if (props.wsManager) {
+        console.log('Requesting space allocation...');
+        props.wsManager.send({
+          type: 'requestSpace',
+          viewportWidth: canvasRef.width,
+          viewportHeight: canvasRef.height
+        });
+      } else {
+        console.warn('No wsManager available!');
+      }
+    }, 1000);
   });
   
   function setupWebSocketHandlers() {
@@ -65,7 +76,8 @@ export function SimpleWorldCanvas(props) {
     
     // Handle remote drawing
     ws.on('remoteDraw', (data) => {
-      console.log('Received remoteDraw:', data);
+      console.log('🎨 Received remoteDraw:', data);
+      setReceivedCount(prev => prev + 1);
       
       // Use drawType instead of type
       switch(data.drawType) {
@@ -475,8 +487,36 @@ export function SimpleWorldCanvas(props) {
     getViewport: () => viewport()
   });
   
+  // Add connection status
+  const isConnected = () => props.wsManager && props.wsManager.ws && props.wsManager.ws.readyState === 1;
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+      {/* Connection Status */}
+      <div style={{
+        position: 'absolute',
+        top: '20px',
+        left: '20px',
+        background: 'rgba(0,0,0,0.9)',
+        color: 'white',
+        padding: '15px',
+        'border-radius': '8px',
+        'z-index': 1000,
+        'min-width': '200px'
+      }}>
+        <div style={{ 'font-weight': 'bold', 'margin-bottom': '10px' }}>
+          {isConnected() ? '🟢 Connected' : '🔴 Disconnected'}
+        </div>
+        <div style={{ 'font-size': '12px' }}>
+          <div>Received: {receivedCount()} messages</div>
+          <div>Drawn paths: {drawnPaths.length}</div>
+          <div>Active remote: {remotePaths.size}</div>
+          {mySpace() && (
+            <div>Space: ({Math.round(mySpace().x)}, {Math.round(mySpace().y)})</div>
+          )}
+        </div>
+      </div>
+      
       {/* Main Canvas */}
       <canvas
         ref={canvasRef}
@@ -523,6 +563,51 @@ export function SimpleWorldCanvas(props) {
           <div>🖱️ Click + Drag to draw</div>
           <div>⇧ Shift + Drag to pan</div>
           <div>🔍 Scroll to zoom</div>
+          <div style={{ 'margin-top': '10px' }}>
+            <button 
+              style={{
+                padding: '5px 10px',
+                'margin-right': '5px',
+                background: '#4ade80',
+                border: 'none',
+                'border-radius': '4px',
+                cursor: 'pointer'
+              }}
+              onClick={() => {
+                // Go to origin
+                setViewport({ x: -400, y: -300, zoom: 1 });
+                renderCanvas();
+                renderMinimap();
+              }}
+            >
+              Go to Origin (0,0)
+            </button>
+            <button 
+              style={{
+                padding: '5px 10px',
+                background: '#3b82f6',
+                border: 'none',
+                'border-radius': '4px',
+                cursor: 'pointer'
+              }}
+              onClick={() => {
+                // Find any drawn content
+                if (drawnPaths.length > 0) {
+                  const lastPath = drawnPaths[drawnPaths.length - 1];
+                  const lastPoint = lastPath.points[lastPath.points.length - 1];
+                  setViewport({
+                    x: lastPoint.x - 400,
+                    y: lastPoint.y - 300,
+                    zoom: 1
+                  });
+                  renderCanvas();
+                  renderMinimap();
+                }
+              }}
+            >
+              Find Drawings
+            </button>
+          </div>
         </div>
       </div>
     </div>

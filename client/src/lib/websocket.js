@@ -13,7 +13,13 @@ export class WebSocketManager {
   connect() {
     console.log('Connecting to WebSocket server...');
     console.log('WebSocket URL:', this.url);
-    this.ws = new WebSocket(this.url);
+    
+    try {
+      this.ws = new WebSocket(this.url);
+    } catch (error) {
+      console.error('Failed to create WebSocket:', error);
+      return;
+    }
     
     this.ws.onopen = () => {
       console.log('✅ WebSocket connected');
@@ -33,14 +39,24 @@ export class WebSocketManager {
     
     this.ws.onerror = (error) => {
       console.error('WebSocket error:', error);
+      console.error('WebSocket state:', this.ws.readyState);
+      console.error('URL was:', this.url);
       this.emit('error', error);
     };
     
-    this.ws.onclose = () => {
-      console.log('WebSocket disconnected');
+    this.ws.onclose = (event) => {
+      console.log('WebSocket disconnected', {
+        code: event.code,
+        reason: event.reason,
+        wasClean: event.wasClean
+      });
       this.emit('disconnected');
       this.stopPing();
-      this.attemptReconnect();
+      
+      // Only reconnect if it was not a clean close
+      if (!event.wasClean && event.code !== 1000) {
+        this.attemptReconnect();
+      }
     };
   }
   
