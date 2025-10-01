@@ -203,6 +203,7 @@ wss.on('connection', (ws, req) => {
           break;
           
         case 'draw':
+          console.log(`[Server] Received draw message from ${clientId}:`, message);
           // Use world canvas draw handler for the infinite canvas
           handleWorldCanvasDraw(clientId, message);
           break;
@@ -683,16 +684,21 @@ function handleWorldCanvasDraw(clientId, message) {
     client.lastDrawPos = null;
   }
   
+  // Remove the 'type' field from message before broadcasting to avoid conflicts
+  const { type, ...drawData } = message;
+  
   // Broadcast to all clients (they handle visibility themselves)
   let broadcastCount = 0;
   clients.forEach((targetClient, targetId) => {
     if (targetId !== clientId && targetClient.ws.readyState === 1) {
       broadcastCount++;
-      targetClient.ws.send(JSON.stringify({
+      const broadcastMessage = {
         type: 'remoteDraw',
         clientId,
-        ...message
-      }));
+        ...drawData  // This now excludes the original 'type' field
+      };
+      console.log(`[Draw] Broadcasting to ${targetId}:`, broadcastMessage);
+      targetClient.ws.send(JSON.stringify(broadcastMessage));
     }
   });
   
