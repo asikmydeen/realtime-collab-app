@@ -29,23 +29,33 @@ export function SimpleWorldCanvas(props) {
     setupCanvas();
     renderCanvas();
     renderMinimap();
-    
-    // Wait a bit for WebSocket to be ready
-    setTimeout(() => {
+  });
+  
+  // Store cleanup functions
+  let wsCleanups = [];
+  
+  // Set up WebSocket handlers when wsManager is available
+  createEffect(() => {
+    const ws = props.wsManager;
+    if (ws) {
+      console.log('[Canvas] wsManager available, setting up handlers');
+      
+      // Clean up previous handlers
+      wsCleanups.forEach(cleanup => cleanup());
+      wsCleanups = [];
+      
       setupWebSocketHandlers();
       
-      // Request space allocation
-      if (props.wsManager) {
+      // Request space allocation after small delay to ensure canvas is ready
+      setTimeout(() => {
         console.log('Requesting space allocation...');
-        props.wsManager.send({
+        ws.send({
           type: 'requestSpace',
           viewportWidth: canvasRef.width,
           viewportHeight: canvasRef.height
         });
-      } else {
-        console.warn('No wsManager available!');
-      }
-    }, 1000);
+      }, 100);
+    }
   });
   
   function setupWebSocketHandlers() {
@@ -58,7 +68,7 @@ export function SimpleWorldCanvas(props) {
     console.log('[Canvas] Setting up WebSocket handlers');
     
     // Handle space allocation
-    ws.on('spaceAssigned', (data) => {
+    const cleanup1 = ws.on('spaceAssigned', (data) => {
       console.log('Space assigned:', data.space);
       setMySpace(data.space);
       
@@ -80,7 +90,7 @@ export function SimpleWorldCanvas(props) {
     });
     
     // Handle remote drawing
-    ws.on('remoteDraw', (data) => {
+    const cleanup2 = ws.on('remoteDraw', (data) => {
       console.log('🎨 Received remoteDraw:', data);
       setReceivedCount(prev => prev + 1);
       
@@ -127,7 +137,7 @@ export function SimpleWorldCanvas(props) {
     });
     
     // Handle space updates
-    ws.on('spaceUpdate', (data) => {
+    const cleanup3 = ws.on('spaceUpdate', (data) => {
       const spaces = new Map();
       data.spaces.forEach(space => {
         spaces.set(space.userId, space);
@@ -136,6 +146,9 @@ export function SimpleWorldCanvas(props) {
       renderCanvas();
       renderMinimap();
     });
+    
+    // Store cleanup functions
+    wsCleanups = [cleanup1, cleanup2, cleanup3];
   }
   
   function setupCanvas() {

@@ -172,6 +172,17 @@ export class WebSocketManager {
       this.listeners.set(event, []);
     }
     this.listeners.get(event).push(callback);
+    
+    // Return cleanup function
+    return () => {
+      const callbacks = this.listeners.get(event);
+      if (callbacks) {
+        const index = callbacks.indexOf(callback);
+        if (index > -1) {
+          callbacks.splice(index, 1);
+        }
+      }
+    };
   }
   
   emit(event, data) {

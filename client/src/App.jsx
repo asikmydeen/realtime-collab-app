@@ -118,6 +118,8 @@ function App() {
     
     // Set the WebSocket manager before connecting
     setWsManager(ws);
+    
+    // Connect after setting up the manager
     ws.connect();
     
     // Start FPS monitoring
