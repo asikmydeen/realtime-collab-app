@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import { WebSocketServer } from 'ws';
 import cors from 'cors';
@@ -22,13 +23,40 @@ app.use(express.json({ limit: '50mb' }));
 // Redis for scaling (optional)
 let redis = null;
 try {
-  redis = createClient({
-    url: process.env.REDIS_URL || 'redis://localhost:6379'
-  });
+  // Use Redis Cloud configuration if credentials are available
+  if (process.env.REDIS_HOST && process.env.REDIS_PASSWORD) {
+    redis = createClient({
+      username: 'default',
+      password: process.env.REDIS_PASSWORD,
+      socket: {
+        host: process.env.REDIS_HOST,
+        port: parseInt(process.env.REDIS_PORT || '6379')
+      }
+    });
+  } else if (process.env.REDIS_URL) {
+    // Fallback to Redis URL format
+    redis = createClient({
+      url: process.env.REDIS_URL
+    });
+  } else {
+    // Local Redis
+    redis = createClient({
+      url: 'redis://localhost:6379'
+    });
+  }
+  
+  redis.on('error', err => console.error('Redis Client Error:', err));
+  
   await redis.connect();
-  console.log('✅ Redis connected');
+  console.log('✅ Redis connected successfully');
+  
+  // Test connection
+  await redis.set('test_connection', 'ok');
+  const test = await redis.get('test_connection');
+  console.log('✅ Redis test:', test);
 } catch (error) {
-  console.log('⚠️ Redis not available, using in-memory state');
+  console.log('⚠️ Redis not available, using in-memory state:', error.message);
+  redis = null;
 }
 
 // HTTP server
