@@ -649,17 +649,22 @@ function broadcastSpaceUpdate() {
 // Modified draw handler to work with space-based canvas
 function handleWorldCanvasDraw(clientId, message) {
   const client = clients.get(clientId);
-  if (!client) return;
+  if (!client) {
+    console.error(`[Draw] Client ${clientId} not found`);
+    return;
+  }
+  
+  console.log(`[Draw] Received from ${clientId}:`, { drawType: message.drawType, x: message.x, y: message.y });
   
   // Update activity when drawing
-  if (message.type === 'draw') {
+  if (message.drawType === 'draw' || message.drawType === 'start') {
     spaceManager.updateActivity(clientId, true);
   }
   
   totalOperations++;
   
   // Store last position for smooth line drawing
-  if (message.type === 'draw') {
+  if (message.drawType === 'draw') {
     if (!client.lastDrawPos) {
       client.lastDrawPos = { x: message.x, y: message.y };
     }
@@ -670,14 +675,19 @@ function handleWorldCanvasDraw(clientId, message) {
     
     // Update last position
     client.lastDrawPos = { x: message.x, y: message.y };
-  } else if (message.type === 'end') {
+  } else if (message.drawType === 'start') {
+    // Initialize position on start
+    client.lastDrawPos = { x: message.x, y: message.y };
+  } else if (message.drawType === 'end') {
     // Clear last position on draw end
     client.lastDrawPos = null;
   }
   
   // Broadcast to all clients (they handle visibility themselves)
+  let broadcastCount = 0;
   clients.forEach((targetClient, targetId) => {
     if (targetId !== clientId && targetClient.ws.readyState === 1) {
+      broadcastCount++;
       targetClient.ws.send(JSON.stringify({
         type: 'remoteDraw',
         clientId,
@@ -685,6 +695,8 @@ function handleWorldCanvasDraw(clientId, message) {
       }));
     }
   });
+  
+  console.log(`[Draw] Broadcasted to ${broadcastCount} clients`);
 }
 
 // Graceful shutdown

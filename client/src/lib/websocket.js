@@ -56,7 +56,13 @@ export class WebSocketManager {
         break;
       
       case 'draw':
+        console.log('[WS] Received draw event:', data);
         this.emit('draw', data);
+        break;
+      
+      case 'remoteDraw':
+        console.log('[WS] Received remote draw event:', data);
+        this.emit('remoteDraw', data);
         break;
       
       case 'cursor':
@@ -96,6 +102,7 @@ export class WebSocketManager {
   }
   
   sendDraw(drawData) {
+    console.log('[WS] Sending draw data:', drawData);
     this.send({ type: 'draw', ...drawData });
   }
   

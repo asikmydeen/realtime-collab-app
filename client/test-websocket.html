@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .canvas-box {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        canvas {
+            border: 2px solid #333;
+            cursor: crosshair;
+            display: block;
+            margin: 10px 0;
+        }
+        .log {
+            height: 200px;
+            overflow-y: auto;
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Drawing Test</h1>
+    
+    <div class="container">
+        <div class="canvas-box">
+            <h2>Client 1</h2>
+            <div id="status1" class="status disconnected">Disconnected</div>
+            <button onclick="connect(1)">Connect</button>
+            <button onclick="disconnect(1)">Disconnect</button>
+            <canvas id="canvas1" width="400" height="300"></canvas>
+            <div id="log1" class="log"></div>
+        </div>
+        
+        <div class="canvas-box">
+            <h2>Client 2</h2>
+            <div id="status2" class="status disconnected">Disconnected</div>
+            <button onclick="connect(2)">Connect</button>
+            <button onclick="disconnect(2)">Disconnect</button>
+            <canvas id="canvas2" width="400" height="300"></canvas>
+            <div id="log2" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        const clients = {
+            1: { ws: null, isDrawing: false, lastPos: null },
+            2: { ws: null, isDrawing: false, lastPos: null }
+        };
+        
+        const colors = ['#ff0000', '#0000ff'];
+        
+        function log(clientId, message) {
+            const logDiv = document.getElementById(`log${clientId}`);
+            const time = new Date().toLocaleTimeString();
+            logDiv.innerHTML = `${time}: ${message}<br>` + logDiv.innerHTML;
+        }
+        
+        function updateStatus(clientId, connected) {
+            const statusDiv = document.getElementById(`status${clientId}`);
+            if (connected) {
+                statusDiv.className = 'status connected';
+                statusDiv.textContent = 'Connected';
+            } else {
+                statusDiv.className = 'status disconnected';
+                statusDiv.textContent = 'Disconnected';
+            }
+        }
+        
+        function connect(clientId) {
+            const wsUrl = 'ws://localhost:3001';
+            const ws = new WebSocket(wsUrl);
+            clients[clientId].ws = ws;
+            
+            ws.onopen = () => {
+                log(clientId, 'Connected to WebSocket');
+                updateStatus(clientId, true);
+                
+                // Send a join message
+                ws.send(JSON.stringify({
+                    type: 'join',
+                    room: 'test-room',
+                    username: `TestUser${clientId}`
+                }));
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                log(clientId, `Received: ${data.type}`);
+                
+                // Handle different message types
+                switch(data.type) {
+                    case 'welcome':
+                        clients[clientId].id = data.clientId;
+                        log(clientId, `Assigned ID: ${data.clientId}`);
+                        break;
+                        
+                    case 'remoteDraw':
+                        // Draw on the opposite canvas
+                        const otherClientId = clientId === 1 ? 2 : 1;
+                        drawRemote(otherClientId, data);
+                        break;
+                        
+                    case 'userJoined':
+                        log(clientId, `User joined: ${data.username}`);
+                        break;
+                }
+            };
+            
+            ws.onclose = () => {
+                log(clientId, 'Disconnected');
+                updateStatus(clientId, false);
+            };
+            
+            ws.onerror = (error) => {
+                log(clientId, `Error: ${error.message || 'Connection failed'}`);
+            };
+        }
+        
+        function disconnect(clientId) {
+            if (clients[clientId].ws) {
+                clients[clientId].ws.close();
+                clients[clientId].ws = null;
+            }
+        }
+        
+        function drawRemote(canvasId, data) {
+            const canvas = document.getElementById(`canvas${canvasId}`);
+            const ctx = canvas.getContext('2d');
+            
+            ctx.strokeStyle = data.color || '#000000';
+            ctx.lineWidth = data.size || 3;
+            ctx.lineCap = 'round';
+            
+            switch(data.type) {
+                case 'start':
+                    ctx.beginPath();
+                    ctx.moveTo(data.x, data.y);
+                    break;
+                    
+                case 'draw':
+                    ctx.beginPath();
+                    if (data.lastX !== undefined && data.lastY !== undefined) {
+                        ctx.moveTo(data.lastX, data.lastY);
+                    } else {
+                        ctx.moveTo(data.x, data.y);
+                    }
+                    ctx.lineTo(data.x, data.y);
+                    ctx.stroke();
+                    break;
+            }
+        }
+        
+        // Setup canvas drawing
+        function setupCanvas(clientId) {
+            const canvas = document.getElementById(`canvas${clientId}`);
+            const ctx = canvas.getContext('2d');
+            const client = clients[clientId];
+            
+            // Clear canvas
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            canvas.addEventListener('mousedown', (e) => {
+                if (!client.ws || client.ws.readyState !== WebSocket.OPEN) {
+                    log(clientId, 'Not connected!');
+                    return;
+                }
+                
+                client.isDrawing = true;
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                client.lastPos = { x, y };
+                
+                // Send start message
+                const message = {
+                    type: 'draw',
+                    drawType: 'start',
+                    x: x,
+                    y: y,
+                    color: colors[clientId - 1],
+                    size: 3
+                };
+                
+                client.ws.send(JSON.stringify(message));
+                log(clientId, `Sent: draw start at (${Math.round(x)}, ${Math.round(y)})`);
+                
+                // Draw locally
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+            });
+            
+            canvas.addEventListener('mousemove', (e) => {
+                if (!client.isDrawing) return;
+                
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                // Draw locally
+                ctx.strokeStyle = colors[clientId - 1];
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(client.lastPos.x, client.lastPos.y);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+                
+                // Send draw message
+                if (client.ws && client.ws.readyState === WebSocket.OPEN) {
+                    const message = {
+                        type: 'draw',
+                        type: 'draw',
+                        x: x,
+                        y: y,
+                        lastX: client.lastPos.x,
+                        lastY: client.lastPos.y,
+                        color: colors[clientId - 1],
+                        size: 3
+                    };
+                    
+                    client.ws.send(JSON.stringify(message));
+                }
+                
+                client.lastPos = { x, y };
+            });
+            
+            canvas.addEventListener('mouseup', () => {
+                if (client.isDrawing) {
+                    client.isDrawing = false;
+                    
+                    // Send end message
+                    if (client.ws && client.ws.readyState === WebSocket.OPEN) {
+                        client.ws.send(JSON.stringify({
+                            type: 'draw',
+                            type: 'end'
+                        }));
+                        log(clientId, 'Sent: draw end');
+                    }
+                }
+            });
+            
+            canvas.addEventListener('mouseleave', () => {
+                if (client.isDrawing) {
+                    client.isDrawing = false;
+                }
+            });
+        }
+        
+        // Initialize canvases
+        setupCanvas(1);
+        setupCanvas(2);
+        
+        // Auto-connect for testing
+        setTimeout(() => {
+            log(1, 'Auto-connecting Client 1...');
+            log(2, 'Auto-connecting Client 2...');
+            connect(1);
+            connect(2);
+        }, 500);
+    </script>
+</body>
+</html>

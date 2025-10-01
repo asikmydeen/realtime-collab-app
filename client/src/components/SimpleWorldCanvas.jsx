@@ -67,7 +67,8 @@ export function SimpleWorldCanvas(props) {
     ws.on('remoteDraw', (data) => {
       console.log('Received remoteDraw:', data);
       
-      switch(data.type) {
+      // Use drawType instead of type
+      switch(data.drawType) {
         case 'start':
           remotePaths.set(data.clientId, {
             color: data.color || '#000000',
@@ -343,8 +344,9 @@ export function SimpleWorldCanvas(props) {
         points: [{ x: worldX, y: worldY }]
       });
       
+      // Don't include 'type' since sendDraw adds it
       props.onDraw?.({ 
-        type: 'start', 
+        drawType: 'start', 
         x: worldX, 
         y: worldY,
         color: props.color || '#000000',
@@ -376,7 +378,7 @@ export function SimpleWorldCanvas(props) {
       currentPath.points.push({ x: worldX, y: worldY });
       
       props.onDraw?.({ 
-        type: 'draw', 
+        drawType: 'draw', 
         x: worldX, 
         y: worldY,
         color: props.color || '#000000',
@@ -390,7 +392,7 @@ export function SimpleWorldCanvas(props) {
   
   function handleMouseUp(e) {
     if (isDrawing()) {
-      props.onDraw?.({ type: 'end' });
+      props.onDraw?.({ drawType: 'end' });
     }
     
     setIsPanning(false);
