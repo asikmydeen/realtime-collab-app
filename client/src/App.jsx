@@ -166,79 +166,135 @@ function App() {
   };
 
   return (
-    <div class="app">
-      <header class="header">
-        <h1 class="title">
-          <span class="logo">🌍</span>
-          World Canvas - Draw Together
-        </h1>
-        
-        <Stats
-          fps={fps()}
-          operations={operations()}
-          latency={latency()}
-          networkLatency={networkLatency()}
-          connected={connected()}
-          users={users().size}
-        />
+    <div class="app" style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+      {/* Minimal Header */}
+      <header style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: '50px',
+        background: 'rgba(0, 0, 0, 0.8)',
+        'backdrop-filter': 'blur(10px)',
+        display: 'flex',
+        'align-items': 'center',
+        'justify-content': 'space-between',
+        padding: '0 20px',
+        'z-index': 1000,
+        'box-shadow': '0 2px 20px rgba(0, 0, 0, 0.2)'
+      }}>
+        <div style={{ display: 'flex', 'align-items': 'center', gap: '20px' }}>
+          <h1 style={{ 
+            margin: 0, 
+            'font-size': '18px', 
+            'font-weight': '600',
+            color: 'white',
+            display: 'flex',
+            'align-items': 'center',
+            gap: '8px'
+          }}>
+            <span style={{ 'font-size': '24px' }}>✨</span>
+            Infinite Canvas
+          </h1>
+          <div style={{ 
+            display: 'flex', 
+            gap: '15px',
+            color: 'rgba(255, 255, 255, 0.8)',
+            'font-size': '14px'
+          }}>
+            <span style={{ color: connected() ? '#4ade80' : '#ef4444' }}>
+              {connected() ? '🟢' : '🔴'} {connected() ? 'Live' : 'Offline'}
+            </span>
+            <span>👥 {users().size} Artists</span>
+            <span>✏️ {operations()} Strokes</span>
+          </div>
+        </div>
       </header>
       
-      <main class="main">
-        <div class="controls-panel">
-          <Controls
-            tool={tool()}
-            setTool={setTool}
-            color={color()}
-            setColor={setColor}
-            brushSize={brushSize()}
-            setBrushSize={setBrushSize}
-            webglEnabled={false}
-            setWebglEnabled={() => {}}
-            onClear={() => {}}
-            onImageUpload={() => {}}
-          />
-          
-          <div class="users-panel">
-            <h3>Active Artists ({users().size})</h3>
-            <div class="users-list" style={{ 'max-height': '400px', 'overflow-y': 'auto' }}>
-              <For each={Array.from(users().values())}>
-                {(user) => (
-                  <div class={`user-item ${user.isMe ? 'me' : ''}`}>
-                    <div 
-                      class="user-avatar" 
-                      style={{ 
-                        'background-color': user.color,
-                        color: getContrastColor(user.color)
-                      }}
-                    >
-                      {user.name.split(' ').map(n => n[0]).join('')}
-                    </div>
-                    <div class="user-info">
-                      <div class="user-name">{user.name}</div>
-                      <div class="user-status">{user.isMe ? 'You' : 'Drawing'}</div>
-                    </div>
-                    <div class="user-dot" />
-                  </div>
-                )}
-              </For>
-            </div>
-          </div>
-        </div>
-        
-        <div class="canvas-container">
-          <div class="canvas-wrapper">
-            <SimpleWorldCanvas
-              color={color()}
-              brushSize={brushSize()}
-              onDraw={handleDraw}
-              onReady={setCanvasAPI}
-              wsManager={wsManager()}
-              currentUser={currentUser()}
+      {/* Full Screen Canvas */}
+      <div style={{ 
+        position: 'absolute',
+        top: '50px',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: '#fafafa'
+      }}>
+        <SimpleWorldCanvas
+          color={color()}
+          brushSize={brushSize()}
+          onDraw={handleDraw}
+          onReady={setCanvasAPI}
+          wsManager={wsManager()}
+          currentUser={currentUser()}
+          connected={connected()}
+        />
+      </div>
+      
+      {/* Minimal Bottom Toolbar */}
+      <div style={{
+        position: 'absolute',
+        bottom: '20px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        background: 'rgba(0, 0, 0, 0.9)',
+        'backdrop-filter': 'blur(10px)',
+        'border-radius': '20px',
+        padding: '10px 20px',
+        display: 'flex',
+        gap: '20px',
+        'align-items': 'center',
+        'box-shadow': '0 4px 30px rgba(0, 0, 0, 0.3)',
+        'z-index': 1000
+      }}>
+        {/* Color Palette */}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {['#000000', '#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899'].map(c => (
+            <button
+              onClick={() => setColor(c)}
+              style={{
+                width: '28px',
+                height: '28px',
+                'border-radius': '50%',
+                background: c,
+                border: color() === c ? '3px solid white' : '2px solid transparent',
+                cursor: 'pointer',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                transform: color() === c ? 'scale(1.15)' : 'scale(1)',
+                'box-shadow': color() === c ? `0 0 0 3px ${c}40` : 'none'
+              }}
+              onMouseEnter={(e) => {
+                if (color() !== c) e.target.style.transform = 'scale(1.1)';
+              }}
+              onMouseLeave={(e) => {
+                if (color() !== c) e.target.style.transform = 'scale(1)';
+              }}
             />
-          </div>
+          ))}
         </div>
         
-      </main>
+        {/* Separator */}
+        <div style={{ width: '1px', height: '30px', background: 'rgba(255, 255, 255, 0.2)' }} />
+        
+        {/* Brush Size */}
+        <div style={{ display: 'flex', 'align-items': 'center', gap: '10px' }}>
+          <span style={{ color: 'white', 'font-size': '12px' }}>Size</span>
+          <input
+            type="range"
+            min="1"
+            max="20"
+            value={brushSize()}
+            onInput={(e) => setBrushSize(Number(e.target.value))}
+            style={{ width: '80px' }}
+          />
+          <div style={{
+            width: `${brushSize()}px`,
+            height: `${brushSize()}px`,
+            'border-radius': '50%',
+            background: color()
+          }} />
+        </div>
+      </div>
     </div>
   );
 }

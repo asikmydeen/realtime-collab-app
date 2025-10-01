@@ -158,8 +158,8 @@ export function SimpleWorldCanvas(props) {
     console.log('Canvas size:', canvasRef.width, 'x', canvasRef.height);
     
     // Setup minimap
-    minimapRef.width = 200;
-    minimapRef.height = 200;
+    minimapRef.width = 150;
+    minimapRef.height = 150;
   }
   
   function renderCanvas() {
@@ -231,8 +231,8 @@ export function SimpleWorldCanvas(props) {
     const startY = Math.floor(vp.y / gridSize) * gridSize - gridSize;
     const endY = vp.y + canvasRef.height / vp.zoom + gridSize;
     
-    ctx.strokeStyle = '#f0f0f0';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#f5f5f5';
+    ctx.lineWidth = 0.5;
     
     // Vertical lines
     for (let x = startX; x <= endX; x += gridSize) {
@@ -250,9 +250,9 @@ export function SimpleWorldCanvas(props) {
       ctx.stroke();
     }
     
-    // Origin lines
-    ctx.strokeStyle = '#ff000020';
-    ctx.lineWidth = 2;
+    // Origin lines (more subtle)
+    ctx.strokeStyle = '#e0e0e0';
+    ctx.lineWidth = 1;
     
     ctx.beginPath();
     ctx.moveTo(0, startY);
@@ -266,18 +266,7 @@ export function SimpleWorldCanvas(props) {
   }
   
   function drawOverlay(ctx) {
-    const vp = viewport();
-    
-    // Position indicator
-    ctx.fillStyle = '#000000';
-    ctx.font = '14px Arial';
-    ctx.fillText(`Position: (${Math.round(vp.x)}, ${Math.round(vp.y)}) Zoom: ${vp.zoom.toFixed(2)}x`, 10, 25);
-    
-    // Show space info if assigned
-    const space = mySpace();
-    if (space) {
-      ctx.fillText(`Your space: (${Math.round(space.x)}, ${Math.round(space.y)})`, 10, 45);
-    }
+    // Keep overlay function empty for now - we have a clean canvas
   }
   
   function drawSpaces(ctx) {
@@ -306,12 +295,15 @@ export function SimpleWorldCanvas(props) {
   
   function renderMinimap() {
     const ctx = minimapRef.getContext('2d');
-    const size = 200;
+    const size = 150;
     const worldSize = 5000;
     const vp = viewport();
     
-    // Clear
-    ctx.fillStyle = '#2a2a2a';
+    // Clear with gradient
+    const gradient = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size);
+    gradient.addColorStop(0, '#1a1a1a');
+    gradient.addColorStop(1, '#0a0a0a');
+    ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, size, size);
     
     // Grid
@@ -461,8 +453,8 @@ export function SimpleWorldCanvas(props) {
     const y = e.clientY - rect.top;
     
     const worldSize = 5000;
-    const worldX = (x / 200) * worldSize - worldSize/2;
-    const worldY = (y / 200) * worldSize - worldSize/2;
+    const worldX = (x / 150) * worldSize - worldSize/2;
+    const worldY = (y / 150) * worldSize - worldSize/2;
     
     // Center viewport on clicked position
     const vp = viewport();
@@ -505,35 +497,8 @@ export function SimpleWorldCanvas(props) {
     getViewport: () => viewport()
   });
   
-  // Add connection status
-  const isConnected = () => props.wsManager && props.wsManager.ws && props.wsManager.ws.readyState === 1;
-
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
-      {/* Connection Status */}
-      <div style={{
-        position: 'absolute',
-        top: '20px',
-        left: '20px',
-        background: 'rgba(0,0,0,0.9)',
-        color: 'white',
-        padding: '15px',
-        'border-radius': '8px',
-        'z-index': 1000,
-        'min-width': '200px'
-      }}>
-        <div style={{ 'font-weight': 'bold', 'margin-bottom': '10px' }}>
-          {isConnected() ? '🟢 Connected' : '🔴 Disconnected'}
-        </div>
-        <div style={{ 'font-size': '12px' }}>
-          <div>Received: {receivedCount()} messages</div>
-          <div>Drawn paths: {drawnPaths.length}</div>
-          <div>Active remote: {remotePaths.size}</div>
-          {mySpace() && (
-            <div>Space: ({Math.round(mySpace().x)}, {Math.round(mySpace().y)})</div>
-          )}
-        </div>
-      </div>
       
       {/* Main Canvas */}
       <canvas
@@ -551,106 +516,26 @@ export function SimpleWorldCanvas(props) {
         {/* Minimap */}
         <div style={{ 
           position: 'absolute', 
-          top: '20px', 
+          bottom: '20px', 
           right: '20px', 
-          background: 'rgba(0,0,0,0.8)', 
-          padding: '10px',
-          'border-radius': '8px',
-          'pointer-events': 'auto'
+          background: 'rgba(0,0,0,0.7)', 
+          padding: '2px',
+          'border-radius': '10px',
+          'pointer-events': 'auto',
+          'box-shadow': '0 4px 20px rgba(0, 0, 0, 0.3)'
         }}>
-          <h4 style={{ color: 'white', margin: '0 0 10px 0', 'font-size': '14px' }}>World Map</h4>
           <canvas
             ref={minimapRef}
-            style={{ border: '2px solid #444', cursor: 'pointer', display: 'block' }}
+            style={{ 
+              'border-radius': '8px',
+              cursor: 'pointer', 
+              display: 'block',
+              opacity: 0.8
+            }}
             onClick={handleMinimapClick}
           />
         </div>
         
-        {/* Controls */}
-        <div style={{
-          position: 'absolute',
-          bottom: '20px',
-          left: '20px',
-          background: 'rgba(0,0,0,0.8)',
-          color: 'white',
-          padding: '15px',
-          'border-radius': '8px',
-          'font-size': '14px',
-          'pointer-events': 'auto'
-        }}>
-          <div>🖱️ Click + Drag to draw</div>
-          <div>⇧ Shift + Drag to pan</div>
-          <div>🔍 Scroll to zoom</div>
-          <div style={{ 'margin-top': '10px' }}>
-            <button 
-              style={{
-                padding: '5px 10px',
-                'margin-right': '5px',
-                background: '#4ade80',
-                border: 'none',
-                'border-radius': '4px',
-                cursor: 'pointer'
-              }}
-              onClick={() => {
-                // Go to origin
-                setViewport({ x: -400, y: -300, zoom: 1 });
-                renderCanvas();
-                renderMinimap();
-              }}
-            >
-              Go to Origin (0,0)
-            </button>
-            <button 
-              style={{
-                padding: '5px 10px',
-                background: '#3b82f6',
-                border: 'none',
-                'border-radius': '4px',
-                cursor: 'pointer'
-              }}
-              onClick={() => {
-                // Find any drawn content
-                if (drawnPaths.length > 0) {
-                  const lastPath = drawnPaths[drawnPaths.length - 1];
-                  const lastPoint = lastPath.points[lastPath.points.length - 1];
-                  setViewport({
-                    x: lastPoint.x - 400,
-                    y: lastPoint.y - 300,
-                    zoom: 1
-                  });
-                  renderCanvas();
-                  renderMinimap();
-                }
-              }}
-            >
-              Find Drawings
-            </button>
-            <button 
-              style={{
-                padding: '5px 10px',
-                'margin-left': '5px',
-                background: '#ef4444',
-                border: 'none',
-                'border-radius': '4px',
-                cursor: 'pointer'
-              }}
-              onClick={() => {
-                // Debug: manually emit a test draw
-                console.log('[Debug] Testing remoteDraw handler...');
-                props.wsManager?.emit('remoteDraw', {
-                  clientId: 'test-client',
-                  drawType: 'start',
-                  x: 100,
-                  y: 100,
-                  color: '#ff0000',
-                  size: 10
-                });
-              }}
-            >
-              Test Draw Event
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );
