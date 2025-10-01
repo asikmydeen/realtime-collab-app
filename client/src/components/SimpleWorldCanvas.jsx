@@ -12,8 +12,8 @@ export function SimpleWorldCanvas(props) {
   const [isDrawing, setIsDrawing] = createSignal(false);
   const [lastPos, setLastPos] = createSignal(null);
   
-  // Drawn content storage
-  const drawnPaths = [];
+  // Drawn content storage - use signals for reactivity
+  const [drawnPaths, setDrawnPaths] = createSignal([]);
   const remotePaths = new Map(); // clientId -> current path
   
   // Space allocation
@@ -135,7 +135,7 @@ export function SimpleWorldCanvas(props) {
         case 'end':
           const finishedPath = remotePaths.get(data.clientId);
           if (finishedPath && finishedPath.points.length > 1) {
-            drawnPaths.push(finishedPath);
+            setDrawnPaths(prev => [...prev, finishedPath]);
           }
           remotePaths.delete(data.clientId);
           break;
@@ -161,17 +161,17 @@ export function SimpleWorldCanvas(props) {
       console.log(`[History] Received batch ${data.batchIndex + 1}/${data.totalBatches} with ${data.drawings.length} drawings`);
       
       // Add historical drawings to our paths
-      data.drawings.forEach(drawing => {
-        const path = {
-          color: drawing.color,
-          size: drawing.size,
-          points: drawing.points
-        };
-        drawnPaths.push(path);
-        console.log(`[History] Added path with ${path.points.length} points, color: ${path.color}`);
-      });
+      const newPaths = data.drawings.map(drawing => ({
+        color: drawing.color,
+        size: drawing.size,
+        points: drawing.points
+      }));
       
-      console.log(`[History] Total paths now: ${drawnPaths.length}`);
+      setDrawnPaths(prev => {
+        const updated = [...prev, ...newPaths];
+        console.log(`[History] Added ${newPaths.length} paths, total now: ${updated.length}`);
+        return updated;
+      });
       renderCanvas();
       renderMinimap();
     });
@@ -182,13 +182,18 @@ export function SimpleWorldCanvas(props) {
   
   function setupCanvas() {
     const parent = canvasRef.parentElement;
-    canvasRef.width = parent.clientWidth;
-    canvasRef.height = parent.clientHeight;
-    console.log('Canvas size:', canvasRef.width, 'x', canvasRef.height);
+    // Only set canvas size if it hasn't been set yet or if size changed
+    if (canvasRef.width !== parent.clientWidth || canvasRef.height !== parent.clientHeight) {
+      canvasRef.width = parent.clientWidth;
+      canvasRef.height = parent.clientHeight;
+      console.log('Canvas size set to:', canvasRef.width, 'x', canvasRef.height);
+    }
     
     // Setup minimap
-    minimapRef.width = 150;
-    minimapRef.height = 150;
+    if (minimapRef.width !== 150) {
+      minimapRef.width = 150;
+      minimapRef.height = 150;
+    }
   }
   
   function renderCanvas() {
@@ -218,7 +223,7 @@ export function SimpleWorldCanvas(props) {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     
-    drawnPaths.forEach(path => {
+    drawnPaths().forEach(path => {
       ctx.strokeStyle = path.color;
       ctx.lineWidth = path.size;
       ctx.beginPath();
@@ -351,7 +356,7 @@ export function SimpleWorldCanvas(props) {
     // Draw content
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 1;
-    drawnPaths.forEach(path => {
+    drawnPaths().forEach(path => {
       ctx.beginPath();
       path.points.forEach((point, i) => {
         const x = ((point.x + worldSize/2) / worldSize) * size;
@@ -389,11 +394,12 @@ export function SimpleWorldCanvas(props) {
       setLastPos({ x: worldX, y: worldY });
       
       // Start new path
-      drawnPaths.push({
+      const newPath = {
         color: props.color || '#000000',
         size: props.brushSize || 3,
         points: [{ x: worldX, y: worldY }]
-      });
+      };
+      setDrawnPaths(prev => [...prev, newPath]);
       
       // Don't include 'type' since sendDraw adds it
       props.onDraw?.({ 
@@ -426,8 +432,14 @@ export function SimpleWorldCanvas(props) {
       const worldY = e.offsetY / vp.zoom + vp.y;
       
       // Add point to current path
-      const currentPath = drawnPaths[drawnPaths.length - 1];
-      currentPath.points.push({ x: worldX, y: worldY });
+      setDrawnPaths(prev => {
+        const paths = [...prev];
+        if (paths.length > 0) {
+          const currentPath = paths[paths.length - 1];
+          currentPath.points.push({ x: worldX, y: worldY });
+        }
+        return paths;
+      });
       
       props.onDraw?.({ 
         drawType: 'draw', 
