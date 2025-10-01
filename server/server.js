@@ -771,6 +771,18 @@ async function handleLoadDrawings(clientId, message) {
     console.log(`[Load] Loading drawings for viewport: ${x},${y} ${width}x${height}`);
     const drawings = await drawingPersistence.loadDrawingsInViewport(x, y, width, height);
     
+    // If no drawings, send empty response
+    if (drawings.length === 0) {
+      client.ws.send(JSON.stringify({
+        type: 'drawingHistory',
+        drawings: [],
+        batchIndex: 0,
+        totalBatches: 0
+      }));
+      console.log(`[Load] No drawings found for viewport`);
+      return;
+    }
+    
     // Send drawings in batches to avoid overwhelming the client
     const batchSize = 50;
     for (let i = 0; i < drawings.length; i += batchSize) {

@@ -24,6 +24,10 @@ export function SimpleWorldCanvas(props) {
   const [debugMode, setDebugMode] = createSignal(true);
   const [receivedCount, setReceivedCount] = createSignal(0);
   
+  // Loading state
+  const [isLoading, setIsLoading] = createSignal(true);
+  const [loadingMessage, setLoadingMessage] = createSignal('Connecting to canvas...');
+  
   onMount(() => {
     console.log('SimpleWorldCanvas mounted');
     setupCanvas();
@@ -49,6 +53,7 @@ export function SimpleWorldCanvas(props) {
       // Request space allocation after small delay to ensure canvas is ready
       setTimeout(() => {
         console.log('Requesting space allocation...');
+        setLoadingMessage('Allocating your drawing space...');
         ws.send({
           type: 'requestSpace',
           viewportWidth: canvasRef.width,
@@ -58,6 +63,7 @@ export function SimpleWorldCanvas(props) {
         // Also load any existing drawings in the default viewport
         setTimeout(() => {
           console.log('[Canvas] Loading initial drawings after space allocation...');
+          setLoadingMessage('Loading existing artwork...');
           loadDrawingsForCurrentView();
         }, 500);
       }, 100);
@@ -172,6 +178,20 @@ export function SimpleWorldCanvas(props) {
         console.log(`[History] Added ${newPaths.length} paths, total now: ${updated.length}`);
         return updated;
       });
+      
+      // Update loading message
+      if (data.totalBatches > 1) {
+        setLoadingMessage(`Loading artwork... (${data.batchIndex + 1}/${data.totalBatches})`);
+      }
+      
+      // Check if this is the last batch
+      if (data.batchIndex + 1 === data.totalBatches || data.totalBatches === 0) {
+        console.log('[History] All batches loaded, canvas ready!');
+        setTimeout(() => {
+          setIsLoading(false);
+        }, 200);
+      }
+      
       renderCanvas();
       renderMinimap();
     });
@@ -380,6 +400,9 @@ export function SimpleWorldCanvas(props) {
   
   // Mouse handlers
   function handleMouseDown(e) {
+    // Prevent interaction while loading
+    if (isLoading()) return;
+    
     if (e.shiftKey || e.button === 1) {
       // Pan mode
       setIsPanning(true);
@@ -416,6 +439,8 @@ export function SimpleWorldCanvas(props) {
   }
   
   function handleMouseMove(e) {
+    if (isLoading()) return;
+    
     if (isPanning()) {
       const vp = viewport();
       setViewport({
@@ -465,6 +490,7 @@ export function SimpleWorldCanvas(props) {
   
   function handleWheel(e) {
     e.preventDefault();
+    if (isLoading()) return;
     const vp = viewport();
     
     // Calculate zoom
@@ -589,6 +615,51 @@ export function SimpleWorldCanvas(props) {
   
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+      {/* Loading Overlay */}
+      {isLoading() && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.9)',
+          display: 'flex',
+          'flex-direction': 'column',
+          'align-items': 'center',
+          'justify-content': 'center',
+          'z-index': 2000,
+          'backdrop-filter': 'blur(5px)'
+        }}>
+          <div style={{
+            'text-align': 'center',
+            color: 'white'
+          }}>
+            {/* Animated loader */}
+            <div style={{
+              width: '80px',
+              height: '80px',
+              margin: '0 auto 20px',
+              border: '3px solid rgba(255, 255, 255, 0.1)',
+              'border-top': '3px solid #4ade80',
+              'border-radius': '50%',
+              animation: 'spin 1s linear infinite'
+            }} />
+            
+            <h2 style={{
+              margin: '0 0 10px',
+              'font-size': '24px',
+              'font-weight': '600'
+            }}>Loading Canvas</h2>
+            
+            <p style={{
+              margin: 0,
+              'font-size': '16px',
+              opacity: 0.8
+            }}>{loadingMessage()}</p>
+          </div>
+        </div>
+      )}
       
       {/* Main Canvas */}
       <canvas
