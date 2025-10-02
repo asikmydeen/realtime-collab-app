@@ -966,9 +966,14 @@ function handleGeoDraw(clientId, message) {
   } else if (message.drawType === 'end') {
     // Save completed geo path
     if (client.currentGeoPath && client.currentGeoPath.points.length > 1) {
-      geoDrawingPersistence.saveGeoPath(client.currentGeoPath).catch(err => {
-        console.error('Failed to save geo path:', err);
-      });
+      console.log(`[GeoDraw] Saving path with ${client.currentGeoPath.points.length} points`);
+      geoDrawingPersistence.saveGeoPath(client.currentGeoPath)
+        .then(pathId => {
+          console.log(`[GeoDraw] Saved geo path: ${pathId}`);
+        })
+        .catch(err => {
+          console.error('Failed to save geo path:', err);
+        });
     }
     client.currentGeoPath = null;
   }
@@ -1037,8 +1042,23 @@ async function loadGeoDrawingsForClient(clientId, bounds) {
   const client = clients.get(clientId);
   if (!client) return;
   
+  console.log(`[LoadGeoDrawings] Loading drawings for ${clientId} in bounds:`, bounds);
+  
   try {
     const drawings = await geoDrawingPersistence.loadGeoDrawings(bounds, 500);
+    
+    console.log(`[LoadGeoDrawings] Found ${drawings.length} drawings`);
+    
+    // If no drawings, send empty response
+    if (drawings.length === 0) {
+      client.ws.send(JSON.stringify({
+        type: 'geoDrawingHistory',
+        drawings: [],
+        batchIndex: 0,
+        totalBatches: 0
+      }));
+      return;
+    }
     
     // Send in batches
     const batchSize = 50;

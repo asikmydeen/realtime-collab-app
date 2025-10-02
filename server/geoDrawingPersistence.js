@@ -78,15 +78,15 @@ export class GeoDrawingPersistence {
       // Add to geohash index for efficient spatial queries
       for (let precision = 3; precision <= this.defaultPrecision; precision++) {
         const hash = geohash.substring(0, precision);
-        await this.redis.sadd(`${this.keyPrefix}geohash:${hash}`, pathId);
+        await this.redis.sAdd(`${this.keyPrefix}geohash:${hash}`, pathId);
       }
 
       // Add to global activity tracking
-      await this.redis.hincrby('geo:stats', 'totalPaths', 1);
+      await this.redis.hIncrBy('geo:stats', 'totalPaths', 1);
       
       // Track activity by country/region (if we have that info)
       if (path.location) {
-        await this.redis.hincrby('geo:activity', path.location.country || 'unknown', 1);
+        await this.redis.hIncrBy('geo:activity', path.location.country || 'unknown', 1);
       }
 
       return pathId;
@@ -98,17 +98,22 @@ export class GeoDrawingPersistence {
 
   // Load drawings for a geographic area
   async loadGeoDrawings(bounds, limit = 1000) {
-    if (!this.redis) return [];
+    if (!this.redis) {
+      console.log('[GeoLoad] Redis not available');
+      return [];
+    }
 
     try {
       const paths = [];
       
       // Calculate geohashes that cover the bounds
       const geohashes = await this.getGeohashesForBounds(bounds);
+      console.log(`[GeoLoad] Searching geohashes:`, geohashes);
       
       // Load paths from each geohash
       for (const geohash of geohashes) {
-        const pathIds = await this.redis.smembers(`${this.keyPrefix}geohash:${geohash}`);
+        const pathIds = await this.redis.sMembers(`${this.keyPrefix}geohash:${geohash}`);
+        console.log(`[GeoLoad] Geohash ${geohash} has ${pathIds.length} paths`);
         
         for (const pathId of pathIds) {
           const pathData = await this.redis.get(`${this.keyPrefix}${pathId}`);
@@ -120,6 +125,7 @@ export class GeoDrawingPersistence {
               paths.push(path);
               
               if (paths.length >= limit) {
+                console.log(`[GeoLoad] Reached limit of ${limit} paths`);
                 return paths;
               }
             }
@@ -127,6 +133,7 @@ export class GeoDrawingPersistence {
         }
       }
 
+      console.log(`[GeoLoad] Found total ${paths.length} paths in bounds`);
       return paths;
     } catch (error) {
       console.error('Failed to load geo drawings:', error);
@@ -175,7 +182,7 @@ export class GeoDrawingPersistence {
       
       for (const key of keys) {
         const geohash = key.split(':').pop();
-        const count = await this.redis.scard(key);
+        const count = await this.redis.sCard(key);
         
         if (count > 0) {
           // Convert geohash back to approximate lat/lng
@@ -240,8 +247,8 @@ export class GeoDrawingPersistence {
     if (!this.redis) return {};
 
     try {
-      const stats = await this.redis.hgetall('geo:stats');
-      const activity = await this.redis.hgetall('geo:activity');
+      const stats = await this.redis.hGetAll('geo:stats');
+      const activity = await this.redis.hGetAll('geo:activity');
       
       return {
         totalPaths: parseInt(stats.totalPaths || 0),

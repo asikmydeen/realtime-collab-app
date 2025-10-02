@@ -631,6 +631,11 @@ export function GeoCanvas(props) {
         renderCanvas();
       });
       
+      // Send initial viewport update if connected
+      if (props.connected && currentBounds()) {
+        sendViewportUpdate();
+      }
+      
       onCleanup(() => {
         cleanup1();
         cleanup2();
@@ -673,6 +678,14 @@ export function GeoCanvas(props) {
     
     renderCanvas();
   }
+  
+  // Request geo drawings when connected and viewport is ready
+  createEffect(() => {
+    if (props.connected && currentBounds()) {
+      console.log('[GeoCanvas] Connected with bounds, requesting geo drawings');
+      sendViewportUpdate();
+    }
+  });
   
   onCleanup(() => {
     if (drawingThrottle.timeoutId) {
