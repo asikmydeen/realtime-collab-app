@@ -238,6 +238,7 @@ connectionManager.on('connection', async (ws, req) => {
   // Get or create user hash
   const clientInfo = { ip: clientIp, userAgent };
   const userHash = await userIdentityManager.getOrCreateUserHash(clientInfo);
+  console.log(`[Auth] Generated initial user hash for ${clientId}: ${userHash}`);
   
   // Store client
   clients.set(clientId, {
@@ -278,6 +279,10 @@ connectionManager.on('connection', async (ws, req) => {
       const client = clients.get(clientId);
       
       switch (message.type) {
+        case 'authenticate':
+          handleAuthenticate(clientId, message);
+          break;
+          
         case 'join':
           handleJoinRoom(clientId, message.room || 'default', message.username);
           break;
@@ -1606,6 +1611,38 @@ async function handleRemoveUserDrawing(clientId, message) {
       type: 'error',
       message: 'Failed to remove drawing'
     }));
+  }
+}
+
+// Handle authentication with existing user hash
+async function handleAuthenticate(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client || !message.userHash) return;
+  
+  try {
+    // Verify the hash exists in our system
+    const exists = await userIdentityManager.userHashExists(message.userHash);
+    
+    if (exists) {
+      // Update client with the authenticated hash
+      client.userHash = message.userHash;
+      console.log(`[Auth] Client ${clientId} authenticated with existing hash: ${message.userHash}`);
+      
+      // Update user identity last seen
+      await userIdentityManager.getUserIdentity(message.userHash);
+      
+      // Re-send welcome with the authenticated hash
+      client.ws.send(JSON.stringify({
+        type: 'welcome',
+        clientId: clientId,
+        userHash: message.userHash
+      }));
+    } else {
+      console.log(`[Auth] Invalid user hash from ${clientId}: ${message.userHash}`);
+      // Keep the originally generated hash
+    }
+  } catch (error) {
+    console.error('Authentication error:', error);
   }
 }
 

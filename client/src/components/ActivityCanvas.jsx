@@ -175,6 +175,7 @@ export function ActivityCanvas(props) {
     
     // Owner can always contribute
     if (activity.ownerId === userHash) {
+      console.log('[ActivityCanvas] User is owner, can contribute');
       setCanContribute(true);
       return;
     }
@@ -182,6 +183,7 @@ export function ActivityCanvas(props) {
     // Check if user is approved contributor
     const isApproved = activity.permissions?.approvedContributors?.includes(userHash);
     const isAllowed = activity.permissions?.allowContributions;
+    console.log('[ActivityCanvas] User contribute status:', { userHash, isApproved, isAllowed });
     setCanContribute(isApproved || isAllowed);
   }
   
@@ -501,6 +503,12 @@ export function ActivityCanvas(props) {
         }
       });
       
+      // Handle welcome (re-authentication)
+      const cleanup9 = props.wsManager.on('welcome', (data) => {
+        console.log('[ActivityCanvas] Received welcome with userHash:', data.userHash);
+        updateContributeStatus();
+      });
+      
       onCleanup(() => {
         cleanup1();
         cleanup2();
@@ -510,6 +518,7 @@ export function ActivityCanvas(props) {
         cleanup6();
         cleanup7();
         cleanup8();
+        cleanup9();
         if (drawingThrottle.timeoutId) {
           clearTimeout(drawingThrottle.timeoutId);
         }

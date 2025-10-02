@@ -26,6 +26,13 @@ export class WebSocketManager {
       this.reconnectAttempts = 0;
       this.emit('connected');
       this.startPing();
+      
+      // Send stored user hash if available
+      const storedHash = localStorage.getItem('userHash');
+      if (storedHash) {
+        console.log('Sending stored user hash:', storedHash);
+        this.send({ type: 'authenticate', userHash: storedHash });
+      }
     };
     
     this.ws.onmessage = (event) => {
