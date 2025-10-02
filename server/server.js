@@ -1209,6 +1209,7 @@ async function handleJoinActivity(clientId, message) {
   }
   
   client.currentActivity = message.activityId;
+  console.log(`[JoinActivity] ${clientId} joining activity ${message.activityId}`);
   
   // Load canvas data for the activity
   const canvasData = await activityPersistence.loadActivityCanvas(message.activityId);
@@ -1221,6 +1222,8 @@ async function handleJoinActivity(clientId, message) {
   
   // Update participant count
   const participants = getActivityParticipants(message.activityId);
+  console.log(`[JoinActivity] Activity ${message.activityId} now has ${participants.size} participants`);
+  
   await activityPersistence.updateActivityStats(message.activityId, {
     participantCount: participants.size
   });
@@ -1232,7 +1235,7 @@ async function handleJoinActivity(clientId, message) {
     username: client.username
   }, clientId);
   
-  console.log(`[Activity] ${clientId} joined activity ${message.activityId}`);
+  console.log(`[Activity] ${clientId} joined activity ${message.activityId} with ${participants.size - 1} other participants`);
 }
 
 function handleLeaveActivity(clientId, message) {
@@ -1323,10 +1326,13 @@ function getActivityParticipants(activityId) {
 // Helper: Broadcast to all participants in an activity
 function broadcastToActivity(activityId, message, excludeId = null) {
   const participants = getActivityParticipants(activityId);
+  console.log(`[BroadcastActivity] Sending ${message.type} to ${participants.size - 1} participants in activity ${activityId}`);
+  
   participants.forEach(participantId => {
     if (participantId !== excludeId) {
       const participant = clients.get(participantId);
       if (participant && participant.ws.readyState === 1) {
+        // Always send activity messages immediately for real-time collaboration
         participant.ws.send(JSON.stringify(message));
       }
     }
@@ -1367,6 +1373,7 @@ async function handleGetDefaultActivity(clientId, message) {
     
     // Auto-join the default activity
     client.currentActivity = activity.id;
+    console.log(`[DefaultActivity] ${clientId} auto-joined activity ${activity.id}`);
     
     // Load canvas data
     const canvasData = await activityPersistence.loadActivityCanvas(activity.id);

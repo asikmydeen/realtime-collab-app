@@ -104,6 +104,15 @@ export class WebSocketManager {
         this.emit('latency', this.latency);
         break;
       
+      case 'batch':
+        // Handle batched messages
+        if (data.messages && Array.isArray(data.messages)) {
+          data.messages.forEach(msg => {
+            this.handleMessage(msg);
+          });
+        }
+        break;
+      
       default:
         this.emit(data.type, data);
     }
