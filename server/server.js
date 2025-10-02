@@ -1305,10 +1305,12 @@ async function handleActivityDraw(clientId, message) {
   console.log(`[ActivityDraw] Broadcasting to ${participants.size - 1} other participants in activity ${activityId}`);
   
   // Broadcast to other participants
+  // Remove the 'type' field from message to avoid overwriting
+  const { type, ...drawData } = message;
   broadcastToActivity(activityId, {
     type: 'remoteActivityDraw',
     clientId,
-    ...message
+    ...drawData
   }, clientId);
 }
 
