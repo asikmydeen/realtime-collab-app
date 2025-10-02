@@ -9,7 +9,7 @@ export function ActivityView(props) {
   // Map state
   const [userLocation, setUserLocation] = createSignal(null);
   const [viewport, setViewport] = createSignal({ x: 0, y: 0 });
-  const [mapZoom, setMapZoom] = createSignal(15); // Start at city level
+  const [mapZoom, setMapZoom] = createSignal(18); // Start at street level to see activities
   const [currentBounds, setCurrentBounds] = createSignal(null);
   const [locationName, setLocationName] = createSignal('');
   
@@ -24,7 +24,7 @@ export function ActivityView(props) {
   // Map interaction
   const [isPanning, setIsPanning] = createSignal(false);
   const [panStart, setPanStart] = createSignal({ x: 0, y: 0 });
-  const [targetZoom, setTargetZoom] = createSignal(15);
+  const [targetZoom, setTargetZoom] = createSignal(18);
   const [loadedTiles, setLoadedTiles] = createSignal(new Map());
   const [tilesLoading, setTilesLoading] = createSignal(new Set());
   
@@ -644,6 +644,8 @@ export function ActivityView(props) {
       });
       
       const cleanup4 = props.wsManager.on('defaultActivity', (data) => {
+        console.log('[ActivityView] Received default activity:', data.activity);
+        
         // Add default activity to the list
         setActivities(prev => {
           const existing = prev.find(a => a.id === data.activity.id);
@@ -655,6 +657,9 @@ export function ActivityView(props) {
         
         // Automatically select the default activity
         selectActivity(data.activity);
+        
+        // Also trigger activities request to populate the list
+        requestActivities();
       });
       
       onCleanup(() => {
@@ -835,12 +840,15 @@ export function ActivityView(props) {
         <ActivityCanvas
           activity={selectedActivity()}
           wsManager={props.wsManager}
+          color={props.color}
+          brushSize={props.brushSize}
           onClose={() => {
+            const activity = selectedActivity();
             setSelectedActivity(null);
-            if (props.wsManager) {
+            if (props.wsManager && activity) {
               props.wsManager.send({
                 type: 'leaveActivity',
-                activityId: selectedActivity().id
+                activityId: activity.id
               });
             }
           }}

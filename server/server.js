@@ -1172,9 +1172,11 @@ async function handleGetActivities(clientId, message) {
   
   try {
     const zoom = message.zoom || 15;
+    console.log(`[GetActivities] Client ${clientId} requesting activities at zoom ${zoom}`);
     
     if (zoom >= 17) { // Street level - show individual activities
       const activities = await activityPersistence.getActivitiesInBounds(message.bounds);
+      console.log(`[GetActivities] Found ${activities.length} activities at street level`);
       
       client.ws.send(JSON.stringify({
         type: 'activities',
@@ -1183,6 +1185,8 @@ async function handleGetActivities(clientId, message) {
       }));
     } else { // Zoomed out - show aggregated by street
       const streetActivities = await activityPersistence.getStreetActivities(message.bounds);
+      const streetCount = Object.keys(streetActivities).length;
+      console.log(`[GetActivities] Found ${streetCount} streets with activities`);
       
       client.ws.send(JSON.stringify({
         type: 'activities',
@@ -1261,6 +1265,7 @@ async function handleActivityDraw(clientId, message) {
   if (!client || !client.currentActivity) return;
   
   const activityId = client.currentActivity;
+  console.log(`[ActivityDraw] ${clientId} drawing in activity ${activityId}, type: ${message.drawType}`);
   
   // Track drawing path
   if (message.drawType === 'start') {
@@ -1291,6 +1296,10 @@ async function handleActivityDraw(clientId, message) {
     }
     client.currentActivityPath = null;
   }
+  
+  // Get participants for logging
+  const participants = getActivityParticipants(activityId);
+  console.log(`[ActivityDraw] Broadcasting to ${participants.size - 1} other participants in activity ${activityId}`);
   
   // Broadcast to other participants
   broadcastToActivity(activityId, {

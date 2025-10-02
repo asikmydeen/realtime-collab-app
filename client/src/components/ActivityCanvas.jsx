@@ -9,17 +9,23 @@ export function ActivityCanvas(props) {
   const [paths, setPaths] = createSignal([]);
   const [remotePaths, setRemotePaths] = createSignal(new Map());
   const [participants, setParticipants] = createSignal(new Map());
+  const [canvasReady, setCanvasReady] = createSignal(false);
   
   // Drawing state
   const drawingThrottle = {
     lastSendTime: 0,
-    throttleMs: 50,
+    throttleMs: 16, // Reduced from 50ms to 16ms (~60fps) for smoother real-time updates
     pendingPoints: [],
     timeoutId: null
   };
   
   onMount(() => {
     setupCanvas();
+    // If we already have the activity, we're ready
+    if (props.activity) {
+      console.log('[ActivityCanvas] Mounted with activity:', props.activity.id);
+      setCanvasReady(true);
+    }
   });
   
   function setupCanvas() {
@@ -49,25 +55,46 @@ export function ActivityCanvas(props) {
   }
   
   function renderDrawings(ctx) {
-    // Render all paths
-    const allPaths = [...paths(), ...Array.from(remotePaths().values())];
+    // Render all completed paths
+    paths().forEach(path => {
+      if (path.points && path.points.length > 0) {
+        ctx.beginPath();
+        ctx.strokeStyle = path.color || '#000000';
+        ctx.lineWidth = path.size || 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        path.points.forEach((point, i) => {
+          if (i === 0) {
+            ctx.moveTo(point.x, point.y);
+          } else {
+            ctx.lineTo(point.x, point.y);
+          }
+        });
+        
+        ctx.stroke();
+      }
+    });
     
-    allPaths.forEach(path => {
-      ctx.beginPath();
-      ctx.strokeStyle = path.color || '#000000';
-      ctx.lineWidth = path.size || 3;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      
-      path.points.forEach((point, i) => {
-        if (i === 0) {
-          ctx.moveTo(point.x, point.y);
-        } else {
-          ctx.lineTo(point.x, point.y);
-        }
-      });
-      
-      ctx.stroke();
+    // Render active remote paths
+    remotePaths().forEach((path) => {
+      if (path.points && path.points.length > 0) {
+        ctx.beginPath();
+        ctx.strokeStyle = path.color || '#000000';
+        ctx.lineWidth = path.size || 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        path.points.forEach((point, i) => {
+          if (i === 0) {
+            ctx.moveTo(point.x, point.y);
+          } else {
+            ctx.lineTo(point.x, point.y);
+          }
+        });
+        
+        ctx.stroke();
+      }
     });
   }
   
@@ -185,9 +212,11 @@ export function ActivityCanvas(props) {
   }
   
   function sendActivityDraw(data) {
-    if (props.wsManager) {
+    if (props.wsManager && props.activity) {
+      console.log('[ActivityCanvas] Sending draw for activity:', props.activity.id);
       props.wsManager.send({
         type: 'activityDraw',
+        activityId: props.activity.id, // Ensure activity ID is included
         ...data
       });
     }
@@ -195,6 +224,8 @@ export function ActivityCanvas(props) {
   
   // Handle remote drawing
   function handleRemoteActivityDraw(data) {
+    console.log('[ActivityCanvas] Received remote draw:', data.drawType, data.clientId);
+    
     switch(data.drawType) {
       case 'start':
         setRemotePaths(prev => {
@@ -238,18 +269,21 @@ export function ActivityCanvas(props) {
         break;
     }
     
-    renderCanvas();
+    // Force immediate re-render
+    requestAnimationFrame(() => renderCanvas());
   }
   
   // WebSocket handlers
   createEffect(() => {
     if (props.wsManager) {
       const cleanup1 = props.wsManager.on('activityJoined', (data) => {
+        console.log('[ActivityCanvas] Activity joined, loading canvas data');
         // Load existing canvas data
         if (data.canvasData && data.canvasData.paths) {
           setPaths(data.canvasData.paths);
           renderCanvas();
         }
+        setCanvasReady(true);
       });
       
       const cleanup2 = props.wsManager.on('remoteActivityDraw', (data) => {
@@ -272,11 +306,24 @@ export function ActivityCanvas(props) {
         });
       });
       
+      // Also handle defaultActivity response which includes canvas data
+      const cleanup5 = props.wsManager.on('defaultActivity', (data) => {
+        if (props.activity && props.activity.id === data.activity.id) {
+          console.log('[ActivityCanvas] Default activity loaded, setting canvas data');
+          if (data.canvasData && data.canvasData.paths) {
+            setPaths(data.canvasData.paths);
+            renderCanvas();
+          }
+          setCanvasReady(true);
+        }
+      });
+      
       onCleanup(() => {
         cleanup1();
         cleanup2();
         cleanup3();
         cleanup4();
+        cleanup5();
         if (drawingThrottle.timeoutId) {
           clearTimeout(drawingThrottle.timeoutId);
         }
