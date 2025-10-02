@@ -209,18 +209,28 @@ export function GeoCanvas(props) {
     ctx.clearRect(0, 0, canvasRef.width, canvasRef.height);
     mapCtx.clearRect(0, 0, mapCanvasRef.width, mapCanvasRef.height);
     
-    // Render map tiles
-    renderMapTiles(mapCtx);
+    const zoom = mapZoom();
     
-    // Composite map onto main canvas
-    ctx.drawImage(mapCanvasRef, 0, 0);
-    
-    // When zoomed out enough, show heatmap overlay
-    if (mapZoom() <= 10) {
-      renderHeatmapOverlay(ctx);
+    // Only show map when zoomed out (exploring mode)
+    if (zoom < mapService.drawingMinZoom) {
+      // Show map tiles when exploring
+      renderMapTiles(mapCtx);
+      ctx.drawImage(mapCanvasRef, 0, 0);
+      
+      // When very zoomed out, show heatmap overlay
+      if (zoom <= 10) {
+        renderHeatmapOverlay(ctx);
+      }
+    } else {
+      // Drawing mode - clean canvas with subtle background
+      ctx.fillStyle = '#fafafa';
+      ctx.fillRect(0, 0, canvasRef.width, canvasRef.height);
+      
+      // Add subtle grid for spatial reference
+      renderDrawingGrid(ctx);
     }
     
-    // Render drawings on top
+    // Always render drawings on top
     renderDrawings(drawCtx);
     ctx.drawImage(drawingCanvasRef, 0, 0);
   }
@@ -310,6 +320,39 @@ export function GeoCanvas(props) {
     ctx.fillRect(0, 0, canvasRef.width, canvasRef.height);
     
     // TODO: Add actual heatmap visualization based on artwork density
+  }
+  
+  // Render subtle grid for drawing mode
+  function renderDrawingGrid(ctx) {
+    const zoom = mapZoom();
+    const vp = viewport();
+    
+    // Grid spacing based on zoom (roughly 1 meter grid)
+    const location = userLocation();
+    const lat = location ? location.lat : 0;
+    const metersPerPixel = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoom);
+    const gridSpacing = Math.max(20, 1 / metersPerPixel); // 1 meter grid, min 20px
+    
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.03)';
+    ctx.lineWidth = 1;
+    
+    // Vertical lines
+    const startX = Math.floor(vp.x / gridSpacing) * gridSpacing - vp.x;
+    for (let x = startX; x < canvasRef.width; x += gridSpacing) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, canvasRef.height);
+      ctx.stroke();
+    }
+    
+    // Horizontal lines
+    const startY = Math.floor(vp.y / gridSpacing) * gridSpacing - vp.y;
+    for (let y = startY; y < canvasRef.height; y += gridSpacing) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(canvasRef.width, y);
+      ctx.stroke();
+    }
   }
   
   // Mouse handlers
@@ -695,7 +738,7 @@ export function GeoCanvas(props) {
           cursor: isPanning() 
             ? 'grabbing' 
             : mapZoom() < mapService.drawingMinZoom 
-              ? 'not-allowed' 
+              ? 'grab' 
               : 'crosshair'
         }}
         onMouseDown={handleMouseDown}
@@ -720,16 +763,20 @@ export function GeoCanvas(props) {
           'backdrop-filter': 'blur(10px)',
           'pointer-events': 'none'
         }}>
-          📍 {locationName()} • Zoom: {mapZoom()}
-          {mapZoom() >= 20 && (
-            <span style={{ color: '#4ade80', 'margin-left': '10px' }}>
-              (~{Math.pow(2, 22 - mapZoom()).toFixed(1)}m precision)
-            </span>
-          )}
-          {mapZoom() < mapService.drawingMinZoom && (
-            <span style={{ color: '#ef4444', 'margin-left': '10px' }}>
-              (Zoom in to level {mapService.drawingMinZoom}+ to draw)
-            </span>
+          {mapZoom() >= mapService.drawingMinZoom ? (
+            <>
+              ✏️ Drawing at {locationName()} • Zoom: {mapZoom()}
+              <span style={{ color: '#4ade80', 'margin-left': '10px' }}>
+                (~{Math.pow(2, 22 - mapZoom()).toFixed(1)}m precision)
+              </span>
+            </>
+          ) : (
+            <>
+              🗺️ Exploring {locationName()} • Zoom: {mapZoom()}
+              <span style={{ color: '#60a5fa', 'margin-left': '10px' }}>
+                (Zoom to {mapService.drawingMinZoom}+ to draw)
+              </span>
+            </>
           )}
         </div>
       )}
@@ -746,9 +793,20 @@ export function GeoCanvas(props) {
         'font-size': '12px',
         opacity: 0.7
       }}>
-        <div>🖱️ Draw on the map</div>
-        <div>⇧ + Drag to pan</div>
-        <div>🔍 Scroll to zoom</div>
+        {mapZoom() >= mapService.drawingMinZoom ? (
+          <>
+            <div>✏️ Drawing Mode</div>
+            <div>🖱️ Click & drag to draw</div>
+            <div>⇧ + Drag to move</div>
+            <div>🔍 Zoom out to explore</div>
+          </>
+        ) : (
+          <>
+            <div>🗺️ Exploration Mode</div>
+            <div>🖱️ Drag to explore</div>
+            <div>🔍 Zoom in to draw</div>
+          </>
+        )}
       </div>
     </div>
   );
