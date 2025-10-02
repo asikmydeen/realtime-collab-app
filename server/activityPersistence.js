@@ -11,7 +11,7 @@ export class ActivityPersistence {
     if (!this.redis) return null;
 
     try {
-      const geohash = await this.getGeohash(data.lat, data.lng, 6); // Use less precision for wider area
+      const geohash = await this.getGeohash(data.lat, data.lng, 5); // Use even less precision to ensure same default activity for nearby users
       const defaultKey = `${this.keyPrefix}default:${geohash}`;
       
       // Check if default activity exists for this area

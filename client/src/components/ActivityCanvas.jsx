@@ -224,7 +224,13 @@ export function ActivityCanvas(props) {
   
   // Handle remote drawing
   function handleRemoteActivityDraw(data) {
-    console.log('[ActivityCanvas] Received remote draw:', data.drawType, data.clientId);
+    console.log('[ActivityCanvas] Received remote draw:', data.drawType, 'from client:', data.clientId);
+    
+    // Skip if it's our own draw (shouldn't happen but just in case)
+    if (props.wsManager && data.clientId === props.wsManager.clientId) {
+      console.log('[ActivityCanvas] Skipping own draw message');
+      return;
+    }
     
     switch(data.drawType) {
       case 'start':

@@ -83,6 +83,11 @@ export class WebSocketManager {
         this.emit('remoteDraw', data);
         break;
       
+      case 'remoteActivityDraw':
+        console.log('[WS] 🎨 Received remoteActivityDraw event:', data);
+        this.emit('remoteActivityDraw', data);
+        break;
+      
       case 'cursor':
         this.emit('cursor', data);
         break;

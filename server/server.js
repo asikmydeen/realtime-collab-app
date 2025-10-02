@@ -1328,15 +1328,24 @@ function broadcastToActivity(activityId, message, excludeId = null) {
   const participants = getActivityParticipants(activityId);
   console.log(`[BroadcastActivity] Sending ${message.type} to ${participants.size - 1} participants in activity ${activityId}`);
   
+  let sentCount = 0;
   participants.forEach(participantId => {
     if (participantId !== excludeId) {
       const participant = clients.get(participantId);
       if (participant && participant.ws.readyState === 1) {
         // Always send activity messages immediately for real-time collaboration
         participant.ws.send(JSON.stringify(message));
+        sentCount++;
+        console.log(`[BroadcastActivity] Sent ${message.type} to participant ${participantId}`);
       }
+    } else {
+      console.log(`[BroadcastActivity] Skipping sender ${participantId}`);
     }
   });
+  
+  if (sentCount === 0) {
+    console.log(`[BroadcastActivity] WARNING: No participants received the message (activity: ${activityId})`);
+  }
 }
 
 // Helper: Broadcast activity update to users in the area
