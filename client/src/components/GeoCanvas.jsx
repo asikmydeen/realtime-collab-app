@@ -38,6 +38,46 @@ export function GeoCanvas(props) {
   onMount(async () => {
     setupCanvas();
     await getUserLocation();
+    
+    // Add keyboard controls for zooming
+    const handleKeyDown = (e) => {
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        const currentTarget = targetZoom();
+        setTargetZoom(Math.min(mapService.maxZoom, currentTarget + 0.5));
+        
+        // Zoom to center of viewport
+        const centerX = canvasRef.width / 2;
+        const centerY = canvasRef.height / 2;
+        const vp = viewport();
+        const centerWorldX = centerX + vp.x;
+        const centerWorldY = centerY + vp.y;
+        const centerLatLng = mapService.worldPixelToLatLng(centerWorldX, centerWorldY, mapZoom());
+        
+        if (!zoomAnimationFrame) {
+          animateZoom(centerX, centerY, centerLatLng);
+        }
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        const currentTarget = targetZoom();
+        setTargetZoom(Math.max(mapService.minZoom, currentTarget - 0.5));
+        
+        // Zoom to center of viewport
+        const centerX = canvasRef.width / 2;
+        const centerY = canvasRef.height / 2;
+        const vp = viewport();
+        const centerWorldX = centerX + vp.x;
+        const centerWorldY = centerY + vp.y;
+        const centerLatLng = mapService.worldPixelToLatLng(centerWorldX, centerWorldY, mapZoom());
+        
+        if (!zoomAnimationFrame) {
+          animateZoom(centerX, centerY, centerLatLng);
+        }
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    onCleanup(() => window.removeEventListener('keydown', handleKeyDown));
   });
   
   // Get user's location
@@ -211,23 +251,35 @@ export function GeoCanvas(props) {
     
     const zoom = mapZoom();
     
-    // Only show map when zoomed out (exploring mode)
-    if (zoom < mapService.drawingMinZoom) {
-      // Show map tiles when exploring
+    // Calculate fade factor for smooth transition
+    const fadeStart = mapService.drawingMinZoom - 1;
+    const fadeEnd = mapService.drawingMinZoom;
+    const mapOpacity = zoom >= fadeEnd ? 0 : zoom <= fadeStart ? 1 : (fadeEnd - zoom) / (fadeEnd - fadeStart);
+    
+    // Always render background
+    ctx.fillStyle = '#fafafa';
+    ctx.fillRect(0, 0, canvasRef.width, canvasRef.height);
+    
+    // Render map tiles with opacity
+    if (mapOpacity > 0) {
       renderMapTiles(mapCtx);
+      ctx.globalAlpha = mapOpacity;
       ctx.drawImage(mapCanvasRef, 0, 0);
+      ctx.globalAlpha = 1;
       
       // When very zoomed out, show heatmap overlay
       if (zoom <= 10) {
         renderHeatmapOverlay(ctx);
       }
-    } else {
-      // Drawing mode - clean canvas with subtle background
-      ctx.fillStyle = '#fafafa';
-      ctx.fillRect(0, 0, canvasRef.width, canvasRef.height);
-      
-      // Add subtle grid for spatial reference
+    }
+    
+    // Add grid in drawing mode
+    if (zoom >= mapService.drawingMinZoom) {
+      // Fade in grid as map fades out
+      const gridOpacity = 1 - mapOpacity;
+      ctx.globalAlpha = gridOpacity;
       renderDrawingGrid(ctx);
+      ctx.globalAlpha = 1;
     }
     
     // Always render drawings on top
@@ -473,30 +525,60 @@ export function GeoCanvas(props) {
     setIsDrawing(false);
   }
   
+  // Smooth zoom animation state
+  const [targetZoom, setTargetZoom] = createSignal(21);
+  const [zoomVelocity, setZoomVelocity] = createSignal(0);
+  let zoomAnimationFrame = null;
+  
   function handleWheel(e) {
     e.preventDefault();
-    const currentZoom = mapZoom();
-    const newZoom = e.deltaY > 0 
-      ? Math.max(mapService.minZoom, currentZoom - 1)
-      : Math.min(mapService.maxZoom, currentZoom + 1);
     
-    if (newZoom !== currentZoom) {
-      // Get mouse position relative to canvas
-      const rect = canvasRef.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-      
-      // Get current center
+    // Calculate zoom delta with sensitivity adjustment
+    const zoomSensitivity = 0.002; // Adjust this to control zoom speed
+    const delta = e.deltaY * zoomSensitivity;
+    
+    // Update target zoom with fractional values
+    const currentTarget = targetZoom();
+    const newTarget = Math.max(mapService.minZoom, Math.min(mapService.maxZoom, currentTarget - delta));
+    setTargetZoom(newTarget);
+    
+    // Get mouse position for zoom centering
+    const rect = canvasRef.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    // Store mouse position for smooth zoom
+    if (!zoomAnimationFrame) {
       const vp = viewport();
-      const currentCenterX = vp.x + canvasRef.width / 2;
-      const currentCenterY = vp.y + canvasRef.height / 2;
-      
-      // Convert mouse position to world coordinates at current zoom
       const mouseWorldX = mouseX + vp.x;
       const mouseWorldY = mouseY + vp.y;
+      const currentZoom = mapZoom();
       const mouseLatLng = mapService.worldPixelToLatLng(mouseWorldX, mouseWorldY, currentZoom);
       
-      // Recalculate viewport to keep mouse position fixed
+      animateZoom(mouseX, mouseY, mouseLatLng);
+    }
+  }
+  
+  function animateZoom(mouseX, mouseY, mouseLatLng) {
+    const animate = () => {
+      const current = mapZoom();
+      const target = targetZoom();
+      const diff = target - current;
+      
+      // Stop animation if close enough
+      if (Math.abs(diff) < 0.01) {
+        if (zoomAnimationFrame) {
+          cancelAnimationFrame(zoomAnimationFrame);
+          zoomAnimationFrame = null;
+        }
+        return;
+      }
+      
+      // Smooth interpolation
+      const smoothing = 0.15; // Adjust for smoother/snappier zoom
+      const newZoom = current + diff * smoothing;
+      
+      // Update zoom and viewport
       const newWorldPos = mapService.latLngToWorldPixel(mouseLatLng.lat, mouseLatLng.lng, newZoom);
       const newViewportX = newWorldPos.x - mouseX;
       const newViewportY = newWorldPos.y - mouseY;
@@ -522,8 +604,17 @@ export function GeoCanvas(props) {
       setCurrentBounds(bounds);
       loadTilesForCurrentView();
       renderCanvas();
-      sendViewportUpdate();
-    }
+      
+      // Send viewport update only occasionally during zoom
+      if (Math.abs(diff) < 0.5 || Math.floor(current) !== Math.floor(newZoom)) {
+        sendViewportUpdate();
+      }
+      
+      // Continue animation
+      zoomAnimationFrame = requestAnimationFrame(animate);
+    };
+    
+    zoomAnimationFrame = requestAnimationFrame(animate);
   }
   
   // Throttled draw send (reuse from SimpleWorldCanvas)
@@ -694,6 +785,9 @@ export function GeoCanvas(props) {
     if (viewportUpdateTimeout) {
       clearTimeout(viewportUpdateTimeout);
     }
+    if (zoomAnimationFrame) {
+      cancelAnimationFrame(zoomAnimationFrame);
+    }
   });
   
   return (
@@ -811,13 +905,15 @@ export function GeoCanvas(props) {
             <div>✏️ Drawing Mode</div>
             <div>🖱️ Click & drag to draw</div>
             <div>⇧ + Drag to move</div>
-            <div>🔍 Zoom out to explore</div>
+            <div>🔍 Scroll to zoom</div>
+            <div>⌨️ +/- keys to zoom</div>
           </>
         ) : (
           <>
             <div>🗺️ Exploration Mode</div>
             <div>🖱️ Drag to explore</div>
             <div>🔍 Zoom in to draw</div>
+            <div>⌨️ +/- keys to zoom</div>
           </>
         )}
       </div>
