@@ -16,6 +16,7 @@ import ConnectionManager from './connectionManager.js';
 import MessageBatcher from './messageBatcher.js';
 import ViewportManager from './viewportManager.js';
 import { GeoDrawingPersistence } from './geoDrawingPersistence.js';
+import { ActivityPersistence } from './activityPersistence.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -99,6 +100,7 @@ const spaceManager = new ServerSpaceManager();
 // Drawing persistence
 const drawingPersistence = new DrawingPersistence(redis);
 const geoDrawingPersistence = new GeoDrawingPersistence(redis);
+const activityPersistence = new ActivityPersistence(redis);
 
 // Connection manager for handling connection queue
 const connectionManager = new ConnectionManager({
@@ -347,6 +349,26 @@ connectionManager.on('connection', (ws, req) => {
           
         case 'requestWorldArtwork':
           handleRequestWorldArtwork(clientId, message);
+          break;
+          
+        case 'createActivity':
+          handleCreateActivity(clientId, message);
+          break;
+          
+        case 'getActivities':
+          handleGetActivities(clientId, message);
+          break;
+          
+        case 'joinActivity':
+          handleJoinActivity(clientId, message);
+          break;
+          
+        case 'leaveActivity':
+          handleLeaveActivity(clientId, message);
+          break;
+          
+        case 'activityDraw':
+          handleActivityDraw(clientId, message);
           break;
 
         default:
@@ -1100,6 +1122,218 @@ async function handleRequestWorldArtwork(clientId, message) {
   } catch (error) {
     console.error('Failed to get world artwork data:', error);
   }
+}
+
+// Activity handlers
+async function handleCreateActivity(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client) return;
+  
+  try {
+    const activity = await activityPersistence.createActivity({
+      title: message.title,
+      description: message.description,
+      lat: message.lat,
+      lng: message.lng,
+      address: message.address,
+      street: message.street,
+      creatorId: clientId,
+      creatorName: client.username
+    });
+    
+    console.log(`[Activity] Created: ${activity.id} at ${activity.street}`);
+    
+    // Join the creator to their activity
+    client.currentActivity = activity.id;
+    
+    client.ws.send(JSON.stringify({
+      type: 'activityCreated',
+      activity
+    }));
+    
+    // Notify others in the area
+    broadcastActivityUpdate(activity);
+  } catch (error) {
+    console.error('Failed to create activity:', error);
+    client.ws.send(JSON.stringify({
+      type: 'error',
+      message: 'Failed to create activity'
+    }));
+  }
+}
+
+async function handleGetActivities(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client || !message.bounds) return;
+  
+  try {
+    const zoom = message.zoom || 15;
+    
+    if (zoom >= 17) { // Street level - show individual activities
+      const activities = await activityPersistence.getActivitiesInBounds(message.bounds);
+      
+      client.ws.send(JSON.stringify({
+        type: 'activities',
+        activities,
+        viewType: 'detailed'
+      }));
+    } else { // Zoomed out - show aggregated by street
+      const streetActivities = await activityPersistence.getStreetActivities(message.bounds);
+      
+      client.ws.send(JSON.stringify({
+        type: 'activities',
+        streetActivities,
+        viewType: 'aggregated'
+      }));
+    }
+  } catch (error) {
+    console.error('Failed to get activities:', error);
+  }
+}
+
+async function handleJoinActivity(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client || !message.activityId) return;
+  
+  // Leave current activity if any
+  if (client.currentActivity) {
+    handleLeaveActivity(clientId, { activityId: client.currentActivity });
+  }
+  
+  client.currentActivity = message.activityId;
+  
+  // Load canvas data for the activity
+  const canvasData = await activityPersistence.loadActivityCanvas(message.activityId);
+  
+  client.ws.send(JSON.stringify({
+    type: 'activityJoined',
+    activityId: message.activityId,
+    canvasData: canvasData || { paths: [] }
+  }));
+  
+  // Update participant count
+  const participants = getActivityParticipants(message.activityId);
+  await activityPersistence.updateActivityStats(message.activityId, {
+    participantCount: participants.size
+  });
+  
+  // Notify other participants
+  broadcastToActivity(message.activityId, {
+    type: 'participantJoined',
+    clientId,
+    username: client.username
+  }, clientId);
+  
+  console.log(`[Activity] ${clientId} joined activity ${message.activityId}`);
+}
+
+function handleLeaveActivity(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client) return;
+  
+  const activityId = message.activityId || client.currentActivity;
+  if (!activityId) return;
+  
+  client.currentActivity = null;
+  
+  // Notify other participants
+  broadcastToActivity(activityId, {
+    type: 'participantLeft',
+    clientId,
+    username: client.username
+  }, clientId);
+  
+  // Update participant count
+  const participants = getActivityParticipants(activityId);
+  activityPersistence.updateActivityStats(activityId, {
+    participantCount: participants.size
+  }).catch(err => console.error('Failed to update participant count:', err));
+  
+  console.log(`[Activity] ${clientId} left activity ${activityId}`);
+}
+
+async function handleActivityDraw(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client || !client.currentActivity) return;
+  
+  const activityId = client.currentActivity;
+  
+  // Track drawing path
+  if (message.drawType === 'start') {
+    client.currentActivityPath = {
+      color: message.color,
+      size: message.size,
+      points: [{ x: message.x, y: message.y }]
+    };
+  } else if (message.drawType === 'draw') {
+    if (client.currentActivityPath) {
+      client.currentActivityPath.points.push({ x: message.x, y: message.y });
+    }
+  } else if (message.drawType === 'end') {
+    // Save the path
+    if (client.currentActivityPath && client.currentActivityPath.points.length > 1) {
+      // Load existing canvas data
+      let canvasData = await activityPersistence.loadActivityCanvas(activityId) || { paths: [] };
+      
+      // Add new path
+      canvasData.paths.push({
+        ...client.currentActivityPath,
+        clientId,
+        timestamp: Date.now()
+      });
+      
+      // Save updated canvas
+      await activityPersistence.saveActivityCanvas(activityId, canvasData);
+    }
+    client.currentActivityPath = null;
+  }
+  
+  // Broadcast to other participants
+  broadcastToActivity(activityId, {
+    type: 'remoteActivityDraw',
+    clientId,
+    ...message
+  }, clientId);
+}
+
+// Helper: Get participants of an activity
+function getActivityParticipants(activityId) {
+  const participants = new Set();
+  clients.forEach((client, clientId) => {
+    if (client.currentActivity === activityId) {
+      participants.add(clientId);
+    }
+  });
+  return participants;
+}
+
+// Helper: Broadcast to all participants in an activity
+function broadcastToActivity(activityId, message, excludeId = null) {
+  const participants = getActivityParticipants(activityId);
+  participants.forEach(participantId => {
+    if (participantId !== excludeId) {
+      const participant = clients.get(participantId);
+      if (participant && participant.ws.readyState === 1) {
+        participant.ws.send(JSON.stringify(message));
+      }
+    }
+  });
+}
+
+// Helper: Broadcast activity update to users in the area
+function broadcastActivityUpdate(activity) {
+  clients.forEach((client) => {
+    if (client.ws.readyState === 1 && client.geoViewport) {
+      // Check if activity is in client's viewport
+      const bounds = client.geoViewport.bounds;
+      if (bounds && activityPersistence.isInBounds(activity.lat, activity.lng, bounds)) {
+        client.ws.send(JSON.stringify({
+          type: 'activityUpdate',
+          activity
+        }));
+      }
+    }
+  });
 }
 
 // Graceful shutdown

@@ -1,5 +1,5 @@
 import { createSignal, onMount, onCleanup, createEffect, For } from 'solid-js';
-import { GeoCanvas } from './components/GeoCanvas';
+import { ActivityView } from './components/ActivityView';
 import { WebSocketManager } from './lib/websocket';
 import { WasmProcessor } from './lib/wasm';
 import { config } from './config';
@@ -213,7 +213,7 @@ function App() {
         </div>
       </header>
       
-      {/* Full Screen Canvas */}
+      {/* Full Screen Activity View */}
       <div style={{ 
         position: 'absolute',
         top: '50px',
@@ -222,10 +222,9 @@ function App() {
         bottom: 0,
         background: '#fafafa'
       }}>
-        <GeoCanvas
+        <ActivityView
           color={color()}
           brushSize={brushSize()}
-          onDraw={handleDraw}
           wsManager={wsManager()}
           connected={connected()}
         />
