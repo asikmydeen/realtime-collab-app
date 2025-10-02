@@ -9,7 +9,7 @@ export function GeoCanvas(props) {
   // Location and map state
   const [userLocation, setUserLocation] = createSignal(null);
   const [currentBounds, setCurrentBounds] = createSignal(null);
-  const [mapZoom, setMapZoom] = createSignal(15); // Street level by default
+  const [mapZoom, setMapZoom] = createSignal(18); // Very zoomed in for local drawing
   const [isLoadingLocation, setIsLoadingLocation] = createSignal(true);
   const [locationName, setLocationName] = createSignal('');
   
@@ -214,6 +214,11 @@ export function GeoCanvas(props) {
     // Composite map onto main canvas
     ctx.drawImage(mapCanvasRef, 0, 0);
     
+    // When zoomed out enough, show heatmap overlay
+    if (mapZoom() <= 10) {
+      renderHeatmapOverlay(ctx);
+    }
+    
     // Render drawings on top
     renderDrawings(drawCtx);
     ctx.drawImage(drawingCanvasRef, 0, 0);
@@ -279,6 +284,16 @@ export function GeoCanvas(props) {
     });
   }
   
+  // Render heatmap overlay for world view
+  function renderHeatmapOverlay(ctx) {
+    // This would show artwork density when zoomed out
+    // For now, just add a subtle overlay effect
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.fillRect(0, 0, canvasRef.width, canvasRef.height);
+    
+    // TODO: Add actual heatmap visualization based on artwork density
+  }
+  
   // Mouse handlers
   function handleMouseDown(e) {
     if (e.shiftKey || e.button === 1) {
@@ -289,9 +304,16 @@ export function GeoCanvas(props) {
         y: e.clientY + viewport().y 
       });
     } else if (e.button === 0) {
-      // Draw mode
-      const vp = viewport();
+      // Draw mode - only allow when zoomed in enough
       const zoom = mapZoom();
+      
+      if (zoom < mapService.drawingMinZoom) {
+        // Show a message that they need to zoom in more
+        console.log(`Please zoom in to at least zoom level ${mapService.drawingMinZoom} to draw`);
+        return;
+      }
+      
+      const vp = viewport();
       
       // Convert mouse position to lat/lng
       const worldX = e.offsetX + vp.x;
@@ -321,24 +343,31 @@ export function GeoCanvas(props) {
   
   function handleMouseMove(e) {
     if (isPanning()) {
-      const vp = viewport();
-      setViewport({
-        x: panStart().x - e.clientX,
-        y: panStart().y - e.clientY
-      });
+      const newX = panStart().x - e.clientX;
+      const newY = panStart().y - e.clientY;
       
-      // Reload tiles if needed
-      const location = userLocation();
-      if (location) {
-        const newCenter = mapService.worldPixelToLatLng(
-          vp.x + canvasRef.width / 2,
-          vp.y + canvasRef.height / 2,
-          mapZoom()
-        );
-        updateViewport(newCenter.lat, newCenter.lng, mapZoom());
-      }
+      setViewport({ x: newX, y: newY });
       
+      // Reload tiles for new position
+      const newCenter = mapService.worldPixelToLatLng(
+        newX + canvasRef.width / 2,
+        newY + canvasRef.height / 2,
+        mapZoom()
+      );
+      
+      // Update bounds without changing viewport
+      const bounds = mapService.getViewportBounds(
+        newCenter.lat, 
+        newCenter.lng,
+        canvasRef.width,
+        canvasRef.height,
+        mapZoom()
+      );
+      
+      setCurrentBounds(bounds);
+      loadTilesForCurrentView();
       renderCanvas();
+      sendViewportUpdate();
     } else if (isDrawing()) {
       const vp = viewport();
       const zoom = mapZoom();
@@ -381,15 +410,54 @@ export function GeoCanvas(props) {
   
   function handleWheel(e) {
     e.preventDefault();
+    const currentZoom = mapZoom();
     const newZoom = e.deltaY > 0 
-      ? Math.max(2, mapZoom() - 1)
-      : Math.min(19, mapZoom() + 1);
+      ? Math.max(mapService.minZoom, currentZoom - 1)
+      : Math.min(mapService.maxZoom, currentZoom + 1);
     
-    if (newZoom !== mapZoom()) {
-      const location = userLocation();
-      if (location) {
-        updateViewport(location.lat, location.lng, newZoom);
-      }
+    if (newZoom !== currentZoom) {
+      // Get mouse position relative to canvas
+      const rect = canvasRef.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      
+      // Get current center
+      const vp = viewport();
+      const currentCenterX = vp.x + canvasRef.width / 2;
+      const currentCenterY = vp.y + canvasRef.height / 2;
+      
+      // Convert mouse position to world coordinates at current zoom
+      const mouseWorldX = mouseX + vp.x;
+      const mouseWorldY = mouseY + vp.y;
+      const mouseLatLng = mapService.worldPixelToLatLng(mouseWorldX, mouseWorldY, currentZoom);
+      
+      // Recalculate viewport to keep mouse position fixed
+      const newWorldPos = mapService.latLngToWorldPixel(mouseLatLng.lat, mouseLatLng.lng, newZoom);
+      const newViewportX = newWorldPos.x - mouseX;
+      const newViewportY = newWorldPos.y - mouseY;
+      
+      setViewport({ x: newViewportX, y: newViewportY });
+      setMapZoom(newZoom);
+      
+      // Update bounds
+      const newCenter = mapService.worldPixelToLatLng(
+        newViewportX + canvasRef.width / 2,
+        newViewportY + canvasRef.height / 2,
+        newZoom
+      );
+      
+      const bounds = mapService.getViewportBounds(
+        newCenter.lat,
+        newCenter.lng,
+        canvasRef.width,
+        canvasRef.height,
+        newZoom
+      );
+      
+      setCurrentBounds(bounds);
+      loadTilesForCurrentView();
+      renderCanvas();
+      sendViewportUpdate();
     }
   }
   
@@ -599,7 +667,15 @@ export function GeoCanvas(props) {
       {/* Main canvas (composited) */}
       <canvas 
         ref={canvasRef}
-        style={{ width: '100%', height: '100%' }}
+        style={{ 
+          width: '100%', 
+          height: '100%',
+          cursor: isPanning() 
+            ? 'grabbing' 
+            : mapZoom() < mapService.drawingMinZoom 
+              ? 'not-allowed' 
+              : 'crosshair'
+        }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -607,7 +683,7 @@ export function GeoCanvas(props) {
         onWheel={handleWheel}
       />
       
-      {/* Location indicator */}
+      {/* Location and zoom indicator */}
       {locationName() && (
         <div style={{
           position: 'absolute',
@@ -623,6 +699,11 @@ export function GeoCanvas(props) {
           'pointer-events': 'none'
         }}>
           📍 {locationName()} • Zoom: {mapZoom()}
+          {mapZoom() < mapService.drawingMinZoom && (
+            <span style={{ color: '#ef4444', 'margin-left': '10px' }}>
+              (Zoom in to level {mapService.drawingMinZoom}+ to draw)
+            </span>
+          )}
         </div>
       )}
       

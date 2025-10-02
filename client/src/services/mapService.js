@@ -4,9 +4,10 @@ export class MapService {
     // Use OpenStreetMap tiles (free and open)
     this.tileServer = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
     this.tileSize = 256;
-    this.defaultZoom = 15; // Street level zoom for drawing
-    this.minZoom = 2; // World view
+    this.defaultZoom = 18; // Building level zoom for local drawing
+    this.minZoom = 3; // Continental view
     this.maxZoom = 19; // Maximum detail
+    this.drawingMinZoom = 16; // Minimum zoom for drawing (neighborhood level)
     
     // Cache loaded tiles
     this.tileCache = new Map();
