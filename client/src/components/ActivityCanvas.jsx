@@ -1,4 +1,5 @@
-import { createSignal, createEffect, onMount, onCleanup } from 'solid-js';
+import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
+import { ActivityControls } from './ActivityControls';
 
 export function ActivityCanvas(props) {
   let canvasRef;
@@ -10,6 +11,8 @@ export function ActivityCanvas(props) {
   const [remotePaths, setRemotePaths] = createSignal(new Map());
   const [participants, setParticipants] = createSignal(new Map());
   const [canvasReady, setCanvasReady] = createSignal(false);
+  const [selectMode, setSelectMode] = createSignal(false);
+  const [selectedPaths, setSelectedPaths] = createSignal(new Set());
   
   // Drawing state
   const drawingThrottle = {
@@ -18,6 +21,53 @@ export function ActivityCanvas(props) {
     pendingPoints: [],
     timeoutId: null
   };
+  
+  // Helper function to check if a point is near a path
+  function isPointNearPath(x, y, path, threshold = 10) {
+    if (!path.points || path.points.length < 2) return false;
+    
+    for (let i = 1; i < path.points.length; i++) {
+      const p1 = path.points[i - 1];
+      const p2 = path.points[i];
+      
+      // Calculate distance from point to line segment
+      const A = x - p1.x;
+      const B = y - p1.y;
+      const C = p2.x - p1.x;
+      const D = p2.y - p1.y;
+      
+      const dot = A * C + B * D;
+      const lenSq = C * C + D * D;
+      let param = -1;
+      
+      if (lenSq !== 0) {
+        param = dot / lenSq;
+      }
+      
+      let xx, yy;
+      
+      if (param < 0) {
+        xx = p1.x;
+        yy = p1.y;
+      } else if (param > 1) {
+        xx = p2.x;
+        yy = p2.y;
+      } else {
+        xx = p1.x + param * C;
+        yy = p1.y + param * D;
+      }
+      
+      const dx = x - xx;
+      const dy = y - yy;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      if (distance <= threshold) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
   
   onMount(() => {
     setupCanvas();
@@ -59,8 +109,21 @@ export function ActivityCanvas(props) {
     paths().forEach(path => {
       if (path.points && path.points.length > 0) {
         ctx.beginPath();
-        ctx.strokeStyle = path.color || '#000000';
-        ctx.lineWidth = path.size || 3;
+        
+        // Highlight selected paths
+        if (selectMode() && selectedPaths().has(path.pathId)) {
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = (path.size || 3) + 2;
+        } else if (selectMode() && path.userHash !== props.wsManager?.userHash) {
+          // In select mode, make other users' drawings more visible
+          ctx.strokeStyle = path.color || '#000000';
+          ctx.lineWidth = path.size || 3;
+          ctx.globalAlpha = 0.5;
+        } else {
+          ctx.strokeStyle = path.color || '#000000';
+          ctx.lineWidth = path.size || 3;
+        }
+        
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         
@@ -73,6 +136,7 @@ export function ActivityCanvas(props) {
         });
         
         ctx.stroke();
+        ctx.globalAlpha = 1; // Reset alpha
       }
     });
     
@@ -101,7 +165,33 @@ export function ActivityCanvas(props) {
   // Mouse handlers
   function handleMouseDown(e) {
     if (e.button === 0) {
-      setIsDrawing(true);
+      if (selectMode()) {
+        // In select mode, find the clicked path
+        const rect = canvasRef.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        // Find path under click (check in reverse order for top-most path)
+        for (let i = paths().length - 1; i >= 0; i--) {
+          const path = paths()[i];
+          if (path.userHash === props.wsManager?.userHash) continue; // Can't select own paths
+          
+          if (isPointNearPath(x, y, path)) {
+            setSelectedPaths(prev => {
+              const next = new Set(prev);
+              if (next.has(path.pathId)) {
+                next.delete(path.pathId);
+              } else {
+                next.add(path.pathId);
+              }
+              return next;
+            });
+            renderCanvas();
+            return;
+          }
+        }
+      } else {
+        setIsDrawing(true);
       
       const rect = canvasRef.getBoundingClientRect();
       const x = e.clientX - rect.left;
@@ -111,7 +201,10 @@ export function ActivityCanvas(props) {
       const newPath = {
         color: props.color || '#000000',
         size: props.brushSize || 3,
-        points: [{ x, y }]
+        points: [{ x, y }],
+        pathId: `${props.wsManager?.clientId}_${Date.now()}`,
+        clientId: props.wsManager?.clientId,
+        userHash: props.wsManager?.userHash
       };
       
       setPaths(prev => [...prev, newPath]);
@@ -324,12 +417,20 @@ export function ActivityCanvas(props) {
         }
       });
       
+      // Handle drawing removal
+      const cleanup6 = props.wsManager.on('drawingRemoved', (data) => {
+        console.log('[ActivityCanvas] Drawing removed:', data.pathId);
+        setPaths(prev => prev.filter(path => path.pathId !== data.pathId));
+        renderCanvas();
+      });
+      
       onCleanup(() => {
         cleanup1();
         cleanup2();
         cleanup3();
         cleanup4();
         cleanup5();
+        cleanup6();
         if (drawingThrottle.timeoutId) {
           clearTimeout(drawingThrottle.timeoutId);
         }
@@ -379,7 +480,7 @@ export function ActivityCanvas(props) {
             style={{
               width: '100%',
               height: '100%',
-              cursor: 'crosshair'
+              cursor: selectMode() ? 'pointer' : 'crosshair'
             }}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
@@ -435,6 +536,33 @@ export function ActivityCanvas(props) {
         >
           ✕
         </button>
+        
+        {/* Owner Controls */}
+        <ActivityControls
+          activity={props.activity}
+          wsManager={props.wsManager}
+          selectMode={selectMode()}
+          selectedPaths={selectedPaths()}
+          onToggleSelectMode={() => {
+            setSelectMode(!selectMode());
+            setSelectedPaths(new Set());
+            renderCanvas();
+          }}
+          onRemoveSelected={() => {
+            const pathsToRemove = Array.from(selectedPaths());
+            pathsToRemove.forEach(pathId => {
+              if (props.wsManager) {
+                props.wsManager.send({
+                  type: 'removeUserDrawing',
+                  activityId: props.activity.id,
+                  pathId
+                });
+              }
+            });
+            setSelectedPaths(new Set());
+            setSelectMode(false);
+          }}
+        />
       </div>
       
       {/* Participants List */}

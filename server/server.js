@@ -17,6 +17,7 @@ import MessageBatcher from './messageBatcher.js';
 import ViewportManager from './viewportManager.js';
 import { GeoDrawingPersistence } from './geoDrawingPersistence.js';
 import { ActivityPersistence } from './activityPersistence.js';
+import { UserIdentityManager } from './userIdentity.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -101,6 +102,7 @@ const spaceManager = new ServerSpaceManager();
 const drawingPersistence = new DrawingPersistence(redis);
 const geoDrawingPersistence = new GeoDrawingPersistence(redis);
 const activityPersistence = new ActivityPersistence(redis);
+const userIdentityManager = new UserIdentityManager(redis);
 
 // Connection manager for handling connection queue
 const connectionManager = new ConnectionManager({
@@ -226,24 +228,32 @@ wss.on('connection', async (ws, req) => {
 });
 
 // Handle connections after they're processed by queue
-connectionManager.on('connection', (ws, req) => {
+connectionManager.on('connection', async (ws, req) => {
   const clientId = uuidv4();
   const clientIp = req.socket.remoteAddress;
+  const userAgent = req.headers['user-agent'] || 'unknown';
   
   console.log(`👤 New client connected: ${clientId} from ${clientIp}`);
+  
+  // Get or create user hash
+  const clientInfo = { ip: clientIp, userAgent };
+  const userHash = await userIdentityManager.getOrCreateUserHash(clientInfo);
   
   // Store client
   clients.set(clientId, {
     id: clientId,
     ws,
     room: null,
-    lastPing: Date.now()
+    lastPing: Date.now(),
+    userHash, // Persistent user identifier
+    location: null
   });
   
   // Send welcome message
   ws.send(JSON.stringify({
     type: 'welcome',
     clientId,
+    userHash, // Send user hash to client for persistent identity
     serverTime: Date.now(),
     stats: {
       totalClients: clients.size,
@@ -373,6 +383,18 @@ connectionManager.on('connection', (ws, req) => {
           
         case 'getDefaultActivity':
           handleGetDefaultActivity(clientId, message);
+          break;
+          
+        case 'getMyActivities':
+          handleGetMyActivities(clientId, message);
+          break;
+          
+        case 'updateActivityPermissions':
+          handleUpdateActivityPermissions(clientId, message);
+          break;
+          
+        case 'removeUserDrawing':
+          handleRemoveUserDrawing(clientId, message);
           break;
 
         default:
@@ -1134,6 +1156,25 @@ async function handleCreateActivity(clientId, message) {
   if (!client) return;
   
   try {
+    // Check if user is at the location (within 500m)
+    if (client.location) {
+      const canCreate = await activityPersistence.canCreateActivityAt(
+        client.location.lat,
+        client.location.lng,
+        message.lat,
+        message.lng
+      );
+      
+      if (!canCreate) {
+        console.log(`[Activity] User ${clientId} not close enough to create activity at ${message.lat}, ${message.lng}`);
+        client.ws.send(JSON.stringify({
+          type: 'error',
+          message: 'You must be within 500 meters of the location to create an activity there'
+        }));
+        return;
+      }
+    }
+    
     const activity = await activityPersistence.createActivity({
       title: message.title,
       description: message.description,
@@ -1141,11 +1182,13 @@ async function handleCreateActivity(clientId, message) {
       lng: message.lng,
       address: message.address,
       street: message.street,
+      ownerId: client.userHash, // Set persistent owner
+      ownerName: client.username,
       creatorId: clientId,
       creatorName: client.username
     });
     
-    console.log(`[Activity] Created: ${activity.id} at ${activity.street}`);
+    console.log(`[Activity] Created: ${activity.id} at ${activity.street} by owner ${client.userHash}`);
     
     // Join the creator to their activity
     client.currentActivity = activity.id;
@@ -1268,6 +1311,18 @@ async function handleActivityDraw(clientId, message) {
   if (!client || !client.currentActivity) return;
   
   const activityId = client.currentActivity;
+  
+  // Check if user can contribute
+  const canContribute = await activityPersistence.canUserContribute(activityId, client.userHash);
+  if (!canContribute) {
+    console.log(`[ActivityDraw] User ${client.userHash} not allowed to draw in activity ${activityId}`);
+    client.ws.send(JSON.stringify({
+      type: 'error',
+      message: 'You do not have permission to draw in this activity'
+    }));
+    return;
+  }
+  
   console.log(`[ActivityDraw] ${clientId} drawing in activity ${activityId}, type: ${message.drawType}`);
   
   // Track drawing path
@@ -1287,10 +1342,12 @@ async function handleActivityDraw(clientId, message) {
       // Load existing canvas data
       let canvasData = await activityPersistence.loadActivityCanvas(activityId) || { paths: [] };
       
-      // Add new path
+      // Add new path with unique ID
       canvasData.paths.push({
         ...client.currentActivityPath,
+        pathId: `${clientId}_${Date.now()}`, // Unique path ID
         clientId,
+        userHash: client.userHash, // Store user hash with path
         timestamp: Date.now()
       });
       
@@ -1413,6 +1470,133 @@ async function handleGetDefaultActivity(clientId, message) {
     client.ws.send(JSON.stringify({
       type: 'error',
       message: 'Failed to get default activity'
+    }));
+  }
+}
+
+// Get user's created activities
+async function handleGetMyActivities(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client) return;
+  
+  try {
+    const activities = await activityPersistence.getActivitiesByOwner(client.userHash);
+    console.log(`[MyActivities] Found ${activities.length} activities for owner ${client.userHash}`);
+    
+    client.ws.send(JSON.stringify({
+      type: 'myActivities',
+      activities
+    }));
+  } catch (error) {
+    console.error('Failed to get user activities:', error);
+    client.ws.send(JSON.stringify({
+      type: 'error',
+      message: 'Failed to get your activities'
+    }));
+  }
+}
+
+// Update activity permissions (owner only)
+async function handleUpdateActivityPermissions(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client || !message.activityId) return;
+  
+  try {
+    // Load activity to check ownership
+    const activityKey = `activity:${message.activityId}`;
+    const activityData = await redis.get(activityKey);
+    if (!activityData) {
+      client.ws.send(JSON.stringify({
+        type: 'error',
+        message: 'Activity not found'
+      }));
+      return;
+    }
+    
+    const activity = JSON.parse(activityData);
+    if (activity.ownerId !== client.userHash) {
+      client.ws.send(JSON.stringify({
+        type: 'error',
+        message: 'You do not own this activity'
+      }));
+      return;
+    }
+    
+    // Update permissions
+    await activityPersistence.updateActivityPermissions(message.activityId, message.permissions);
+    
+    console.log(`[Permissions] Updated permissions for activity ${message.activityId}`);
+    
+    client.ws.send(JSON.stringify({
+      type: 'permissionsUpdated',
+      activityId: message.activityId,
+      permissions: message.permissions
+    }));
+    
+    // Notify participants of permission change
+    broadcastToActivity(message.activityId, {
+      type: 'activityPermissionsChanged',
+      permissions: message.permissions
+    }, clientId);
+  } catch (error) {
+    console.error('Failed to update permissions:', error);
+    client.ws.send(JSON.stringify({
+      type: 'error',
+      message: 'Failed to update permissions'
+    }));
+  }
+}
+
+// Remove a user's drawing from activity (owner/moderator only)
+async function handleRemoveUserDrawing(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client || !message.activityId || !message.pathId) return;
+  
+  try {
+    // Load activity to check ownership/moderation
+    const activityKey = `activity:${message.activityId}`;
+    const activityInfo = await redis.get(activityKey);
+    if (!activityInfo) {
+      client.ws.send(JSON.stringify({
+        type: 'error',
+        message: 'Activity not found'
+      }));
+      return;
+    }
+    
+    const activityData = JSON.parse(activityInfo);
+    
+    // Check if user is owner or moderator
+    const isOwner = activityData.ownerId === client.userHash;
+    const isModerator = activityData.permissions?.moderators?.includes(client.userHash);
+    
+    if (!isOwner && !isModerator) {
+      client.ws.send(JSON.stringify({
+        type: 'error',
+        message: 'You do not have permission to remove drawings'
+      }));
+      return;
+    }
+    
+    // Load canvas and remove the path
+    const canvasData = await activityPersistence.loadActivityCanvas(message.activityId);
+    if (canvasData && canvasData.paths) {
+      canvasData.paths = canvasData.paths.filter(path => path.pathId !== message.pathId);
+      await activityPersistence.saveActivityCanvas(message.activityId, canvasData);
+    }
+    
+    console.log(`[RemoveDraw] Removed drawing ${message.pathId} from activity ${message.activityId}`);
+    
+    // Broadcast removal to all participants
+    broadcastToActivity(message.activityId, {
+      type: 'drawingRemoved',
+      pathId: message.pathId
+    });
+  } catch (error) {
+    console.error('Failed to remove drawing:', error);
+    client.ws.send(JSON.stringify({
+      type: 'error',
+      message: 'Failed to remove drawing'
     }));
   }
 }

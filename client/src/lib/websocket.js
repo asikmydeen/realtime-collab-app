@@ -66,6 +66,11 @@ export class WebSocketManager {
     switch (data.type) {
       case 'welcome':
         this.clientId = data.clientId;
+        this.userHash = data.userHash; // Store persistent user hash
+        // Store in localStorage for persistence across sessions
+        if (data.userHash) {
+          localStorage.setItem('userHash', data.userHash);
+        }
         this.emit('welcome', data);
         break;
       

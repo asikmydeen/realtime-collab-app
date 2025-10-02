@@ -72,7 +72,9 @@ export class ActivityPersistence {
         id: activityId,
         title: data.title || 'Untitled Activity',
         description: data.description || '',
-        creatorId: data.creatorId,
+        ownerId: data.ownerId, // Persistent owner hash
+        ownerName: data.ownerName || 'Anonymous',
+        creatorId: data.creatorId, // Session-specific creator ID
         creatorName: data.creatorName || 'Anonymous',
         lat: data.lat,
         lng: data.lng,
@@ -83,7 +85,12 @@ export class ActivityPersistence {
         lastActive: Date.now(),
         participantCount: 1,
         drawingCount: 0,
-        isDefault: false
+        isDefault: false,
+        permissions: {
+          allowContributions: true, // Default to allow contributions
+          bannedUsers: [], // List of banned user hashes
+          moderators: [] // List of user hashes who can moderate
+        }
       };
 
       // Store activity
@@ -319,5 +326,105 @@ export class ActivityPersistence {
     }
     
     return Array.from(geohashes);
+  }
+  
+  // Check if user is within range of a location (500 meters)
+  async isUserNearLocation(userLat, userLng, targetLat, targetLng, maxDistance = 500) {
+    // Calculate distance using Haversine formula
+    const R = 6371e3; // Earth's radius in meters
+    const φ1 = userLat * Math.PI / 180;
+    const φ2 = targetLat * Math.PI / 180;
+    const Δφ = (targetLat - userLat) * Math.PI / 180;
+    const Δλ = (targetLng - userLng) * Math.PI / 180;
+    
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distance = R * c; // Distance in meters
+    
+    return distance <= maxDistance;
+  }
+  
+  // Check if user can create activity at location
+  async canCreateActivityAt(userLat, userLng, targetLat, targetLng) {
+    // User must be within 500 meters of the location to create an activity
+    return await this.isUserNearLocation(userLat, userLng, targetLat, targetLng, 500);
+  }
+  
+  // Get activities created by a specific owner
+  async getActivitiesByOwner(ownerId) {
+    if (!this.redis || !ownerId) return [];
+    
+    try {
+      const activities = [];
+      // We need to scan all activities to find ones by this owner
+      // In production, you'd want an index for this
+      const keys = await this.redis.keys(`${this.keyPrefix}*`);
+      
+      for (const key of keys) {
+        if (key.includes(':canvas:') || key.includes(':default:') || key.includes(':geo:') || key.includes(':street:')) continue;
+        
+        const activityData = await this.redis.get(key);
+        if (activityData) {
+          const activity = JSON.parse(activityData);
+          if (activity.ownerId === ownerId) {
+            activities.push(activity);
+          }
+        }
+      }
+      
+      // Sort by creation date, newest first
+      activities.sort((a, b) => b.createdAt - a.createdAt);
+      return activities;
+    } catch (error) {
+      console.error('Failed to get activities by owner:', error);
+      return [];
+    }
+  }
+  
+  // Update activity permissions
+  async updateActivityPermissions(activityId, permissions) {
+    if (!this.redis) return false;
+    
+    try {
+      const activityData = await this.redis.get(`${this.keyPrefix}${activityId}`);
+      if (!activityData) return false;
+      
+      const activity = JSON.parse(activityData);
+      activity.permissions = { ...activity.permissions, ...permissions };
+      
+      await this.redis.set(`${this.keyPrefix}${activityId}`, JSON.stringify(activity));
+      return true;
+    } catch (error) {
+      console.error('Failed to update activity permissions:', error);
+      return false;
+    }
+  }
+  
+  // Check if user can contribute to activity
+  async canUserContribute(activityId, userHash) {
+    if (!this.redis) return true; // Default to allow if no Redis
+    
+    try {
+      const activityData = await this.redis.get(`${this.keyPrefix}${activityId}`);
+      if (!activityData) return false;
+      
+      const activity = JSON.parse(activityData);
+      
+      // Owner can always contribute
+      if (activity.ownerId === userHash) return true;
+      
+      // Check if contributions are allowed
+      if (!activity.permissions || !activity.permissions.allowContributions) return false;
+      
+      // Check if user is banned
+      if (activity.permissions.bannedUsers && activity.permissions.bannedUsers.includes(userHash)) return false;
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to check contribution permission:', error);
+      return true; // Default to allow on error
+    }
   }
 }

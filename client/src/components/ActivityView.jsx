@@ -20,6 +20,8 @@ export function ActivityView(props) {
   const [showActivityPanel, setShowActivityPanel] = createSignal(false);
   const [showCreateActivity, setShowCreateActivity] = createSignal(false);
   const [viewType, setViewType] = createSignal('aggregated'); // 'aggregated' or 'detailed'
+  const [myActivities, setMyActivities] = createSignal([]);
+  const [showMyActivities, setShowMyActivities] = createSignal(false);
   
   // Map interaction
   const [isPanning, setIsPanning] = createSignal(false);
@@ -662,11 +664,17 @@ export function ActivityView(props) {
         requestActivities();
       });
       
+      const cleanup5 = props.wsManager.on('myActivities', (data) => {
+        console.log('[ActivityView] Received my activities:', data.activities?.length);
+        setMyActivities(data.activities || []);
+      });
+      
       onCleanup(() => {
         cleanup1();
         cleanup2();
         cleanup3();
         cleanup4();
+        cleanup5();
         if (zoomAnimationFrame) {
           cancelAnimationFrame(zoomAnimationFrame);
         }
@@ -770,9 +778,40 @@ export function ActivityView(props) {
             padding: '20px',
             'border-bottom': '1px solid rgba(0, 0, 0, 0.1)'
           }}>
-            <h3 style={{ margin: '0 0 10px 0', 'font-size': '18px' }}>
-              Activities Nearby
-            </h3>
+            <div style={{ 
+              display: 'flex',
+              'align-items': 'center',
+              'justify-content': 'space-between',
+              'margin-bottom': '10px'
+            }}>
+              <h3 style={{ margin: 0, 'font-size': '18px' }}>
+                {showMyActivities() ? 'My Activities' : 'Activities Nearby'}
+              </h3>
+              <button
+                onClick={() => {
+                  const newValue = !showMyActivities();
+                  setShowMyActivities(newValue);
+                  if (newValue && props.wsManager) {
+                    // Request user's activities
+                    props.wsManager.send({ type: 'getMyActivities' });
+                  } else if (!newValue) {
+                    // Request nearby activities again
+                    requestActivities();
+                  }
+                }}
+                style={{
+                  padding: '5px 10px',
+                  background: 'rgba(59, 130, 246, 0.1)',
+                  color: '#3b82f6',
+                  border: '1px solid #3b82f6',
+                  'border-radius': '5px',
+                  'font-size': '12px',
+                  cursor: 'pointer'
+                }}
+              >
+                {showMyActivities() ? '📍 Show All' : '👤 My Activities'}
+              </button>
+            </div>
             <button
               onClick={() => setShowCreateActivity(true)}
               style={{
@@ -795,7 +834,27 @@ export function ActivityView(props) {
             'overflow-y': 'auto',
             padding: '10px'
           }}>
-            {activities().map(activity => (
+            {(showMyActivities() ? myActivities() : activities()).length === 0 ? (
+              <div style={{
+                'text-align': 'center',
+                padding: '40px 20px',
+                color: '#6b7280'
+              }}>
+                {showMyActivities() ? (
+                  <>
+                    <div style={{ 'font-size': '48px', 'margin-bottom': '15px' }}>🎨</div>
+                    <div style={{ 'font-weight': 'bold', 'margin-bottom': '5px' }}>No Activities Yet</div>
+                    <div style={{ 'font-size': '14px' }}>Create your first activity to start drawing!</div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ 'font-size': '48px', 'margin-bottom': '15px' }}>📍</div>
+                    <div style={{ 'font-weight': 'bold', 'margin-bottom': '5px' }}>No Activities Here</div>
+                    <div style={{ 'font-size': '14px' }}>Be the first to create an activity in this area!</div>
+                  </>
+                )}
+              </div>
+            ) : (showMyActivities() ? myActivities() : activities()).map(activity => (
                 <button
                   onClick={() => selectActivity(activity)}
                   style={{
@@ -808,6 +867,7 @@ export function ActivityView(props) {
                     'text-align': 'left',
                     cursor: 'pointer',
                     transition: 'all 0.2s',
+                    position: 'relative',
                     '&:hover': {
                       'border-color': '#3b82f6'
                     }
@@ -819,6 +879,21 @@ export function ActivityView(props) {
                     e.target.style.borderColor = 'transparent';
                   }}
                 >
+                  {props.wsManager?.userHash === activity.ownerId && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '5px',
+                      right: '5px',
+                      background: '#fbbf24',
+                      color: 'black',
+                      padding: '2px 8px',
+                      'border-radius': '12px',
+                      'font-size': '10px',
+                      'font-weight': 'bold'
+                    }}>
+                      👑 OWNER
+                    </div>
+                  )}
                   <div style={{ 'font-weight': 'bold', 'margin-bottom': '5px' }}>
                     {activity.title}
                   </div>
@@ -829,6 +904,11 @@ export function ActivityView(props) {
                     👥 {activity.participantCount} participant{activity.participantCount !== 1 ? 's' : ''}
                     • 🎨 {activity.drawingCount} drawing{activity.drawingCount !== 1 ? 's' : ''}
                   </div>
+                  {showMyActivities() && (
+                    <div style={{ 'font-size': '11px', color: '#10b981', 'margin-top': '5px' }}>
+                      ✅ Contributions {activity.permissions?.allowContributions ? 'allowed' : 'disabled'}
+                    </div>
+                  )}
                 </button>
               ))}
           </div>
