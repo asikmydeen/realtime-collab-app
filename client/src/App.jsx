@@ -1,5 +1,7 @@
 import { createSignal, onMount, onCleanup, createEffect, For } from 'solid-js';
 import { SimpleWorldCanvas } from './components/SimpleWorldCanvas';
+import { GeoCanvas } from './components/GeoCanvas';
+import { WorldMapView } from './components/WorldMapView';
 import { Controls } from './components/Controls';
 import { Stats } from './components/Stats';
 import { Minimap } from './components/Minimap';
@@ -18,6 +20,9 @@ function App() {
   const [color, setColor] = createSignal('#000000');
   const [brushSize, setBrushSize] = createSignal(3);
   const [username, setUsername] = createSignal(generateUsername());
+  
+  // Canvas mode state
+  const [canvasMode, setCanvasMode] = createSignal('geo'); // 'geo', 'world', 'classic'
   
   // Performance metrics
   const [fps, setFps] = createSignal(60);
@@ -155,7 +160,15 @@ function App() {
   const handleDraw = (drawData) => {
     const ws = wsManager();
     if (ws && connected()) {
-      ws.sendDraw(drawData);
+      // Send geo-based draw if in geo mode
+      if (canvasMode() === 'geo' && (drawData.lat !== undefined || drawData.lng !== undefined)) {
+        ws.send({
+          type: 'geoDraw',
+          ...drawData
+        });
+      } else {
+        ws.sendDraw(drawData);
+      }
       setOperations(prev => prev + 1);
     }
   };
@@ -220,15 +233,32 @@ function App() {
         bottom: 0,
         background: '#fafafa'
       }}>
-        <SimpleWorldCanvas
-          color={color()}
-          brushSize={brushSize()}
-          onDraw={handleDraw}
-          onReady={setCanvasAPI}
-          wsManager={wsManager()}
-          currentUser={currentUser()}
-          connected={connected()}
-        />
+        {canvasMode() === 'geo' && (
+          <GeoCanvas
+            color={color()}
+            brushSize={brushSize()}
+            onDraw={handleDraw}
+            wsManager={wsManager()}
+            connected={connected()}
+          />
+        )}
+        {canvasMode() === 'world' && (
+          <WorldMapView
+            wsManager={wsManager()}
+            connected={connected()}
+          />
+        )}
+        {canvasMode() === 'classic' && (
+          <SimpleWorldCanvas
+            color={color()}
+            brushSize={brushSize()}
+            onDraw={handleDraw}
+            onReady={setCanvasAPI}
+            wsManager={wsManager()}
+            currentUser={currentUser()}
+            connected={connected()}
+          />
+        )}
       </div>
       
       {/* Minimal Bottom Toolbar */}
@@ -271,6 +301,61 @@ function App() {
               }}
             />
           ))}
+        </div>
+        
+        {/* Separator */}
+        <div style={{ width: '1px', height: '30px', background: 'rgba(255, 255, 255, 0.2)' }} />
+        
+        {/* Canvas Mode Toggle */}
+        <div style={{ display: 'flex', gap: '5px' }}>
+          <button
+            onClick={() => setCanvasMode('geo')}
+            style={{
+              padding: '5px 10px',
+              background: canvasMode() === 'geo' ? 'rgba(74, 222, 128, 0.3)' : 'transparent',
+              color: 'white',
+              border: canvasMode() === 'geo' ? '1px solid #4ade80' : '1px solid rgba(255, 255, 255, 0.2)',
+              'border-radius': '8px',
+              cursor: 'pointer',
+              'font-size': '12px',
+              transition: 'all 0.2s'
+            }}
+            title="Draw on your local map"
+          >
+            🗺️ Map
+          </button>
+          <button
+            onClick={() => setCanvasMode('world')}
+            style={{
+              padding: '5px 10px',
+              background: canvasMode() === 'world' ? 'rgba(74, 222, 128, 0.3)' : 'transparent',
+              color: 'white',
+              border: canvasMode() === 'world' ? '1px solid #4ade80' : '1px solid rgba(255, 255, 255, 0.2)',
+              'border-radius': '8px',
+              cursor: 'pointer',
+              'font-size': '12px',
+              transition: 'all 0.2s'
+            }}
+            title="View global artwork"
+          >
+            🌍 World
+          </button>
+          <button
+            onClick={() => setCanvasMode('classic')}
+            style={{
+              padding: '5px 10px',
+              background: canvasMode() === 'classic' ? 'rgba(74, 222, 128, 0.3)' : 'transparent',
+              color: 'white',
+              border: canvasMode() === 'classic' ? '1px solid #4ade80' : '1px solid rgba(255, 255, 255, 0.2)',
+              'border-radius': '8px',
+              cursor: 'pointer',
+              'font-size': '12px',
+              transition: 'all 0.2s'
+            }}
+            title="Classic canvas mode"
+          >
+            📐 Classic
+          </button>
         </div>
         
         {/* Separator */}

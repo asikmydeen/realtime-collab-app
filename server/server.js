@@ -15,6 +15,7 @@ import { DrawingPersistence } from './drawingPersistence.js';
 import ConnectionManager from './connectionManager.js';
 import MessageBatcher from './messageBatcher.js';
 import ViewportManager from './viewportManager.js';
+import { GeoDrawingPersistence } from './geoDrawingPersistence.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -97,6 +98,7 @@ const spaceManager = new ServerSpaceManager();
 
 // Drawing persistence
 const drawingPersistence = new DrawingPersistence(redis);
+const geoDrawingPersistence = new GeoDrawingPersistence(redis);
 
 // Connection manager for handling connection queue
 const connectionManager = new ConnectionManager({
@@ -330,6 +332,22 @@ connectionManager.on('connection', (ws, req) => {
         case 'updateViewport':
           handleViewportUpdate(clientId, message);
           break;
+          
+        case 'geoDraw':
+          handleGeoDraw(clientId, message);
+          break;
+          
+        case 'setLocation':
+          handleSetLocation(clientId, message);
+          break;
+          
+        case 'updateGeoViewport':
+          handleGeoViewportUpdate(clientId, message);
+          break;
+          
+        case 'requestWorldArtwork':
+          handleRequestWorldArtwork(clientId, message);
+          break;
 
         default:
           console.log('Unknown message type:', message.type);
@@ -369,6 +387,21 @@ connectionManager.on('connection', (ws, req) => {
     
     // Clean up viewport manager
     viewportManager.removeClient(clientId);
+    
+    // Notify others that artist went offline
+    if (client && client.location) {
+      const locationUpdate = {
+        type: 'artistLocation',
+        clientId,
+        active: false
+      };
+      
+      clients.forEach((targetClient) => {
+        if (targetClient.ws.readyState === 1) {
+          targetClient.ws.send(JSON.stringify(locationUpdate));
+        }
+      });
+    }
     
     clients.delete(clientId);
     cleanupInfiniteCanvas(clientId);
@@ -908,6 +941,148 @@ function handleViewportUpdate(clientId, message) {
   });
   
   console.log(`[Viewport] Updated for ${clientId}: ${width}x${height} at (${x}, ${y}), zoom: ${zoom}`);
+}
+
+// Handle geo-based drawing
+function handleGeoDraw(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client) return;
+  
+  console.log(`[GeoDraw] Received from ${clientId}:`, { drawType: message.drawType, lat: message.lat, lng: message.lng });
+  
+  // Track geo path
+  if (message.drawType === 'start') {
+    client.currentGeoPath = {
+      clientId,
+      color: message.color,
+      size: message.size,
+      points: [{ lat: message.lat, lng: message.lng }],
+      location: client.location
+    };
+  } else if (message.drawType === 'draw') {
+    if (client.currentGeoPath) {
+      client.currentGeoPath.points.push({ lat: message.lat, lng: message.lng });
+    }
+  } else if (message.drawType === 'end') {
+    // Save completed geo path
+    if (client.currentGeoPath && client.currentGeoPath.points.length > 1) {
+      geoDrawingPersistence.saveGeoPath(client.currentGeoPath).catch(err => {
+        console.error('Failed to save geo path:', err);
+      });
+    }
+    client.currentGeoPath = null;
+  }
+  
+  // Broadcast to other clients
+  const broadcastMessage = {
+    type: 'remoteGeoDraw',
+    clientId,
+    ...message
+  };
+  
+  // For now, broadcast to all clients (could optimize with geo proximity later)
+  let broadcastCount = 0;
+  clients.forEach((targetClient, targetId) => {
+    if (targetId !== clientId && targetClient.ws.readyState === 1) {
+      broadcastCount++;
+      messageBatcher.addMessage(targetId, broadcastMessage, (data) => {
+        if (targetClient.ws.readyState === 1) {
+          targetClient.ws.send(data);
+        }
+      });
+    }
+  });
+  
+  console.log(`[GeoDraw] Broadcasted to ${broadcastCount} clients`);
+}
+
+// Handle user location update
+function handleSetLocation(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client || !message.location) return;
+  
+  client.location = message.location;
+  console.log(`[Location] Client ${clientId} at ${message.location.lat}, ${message.location.lng}`);
+  
+  // Broadcast artist location for world map
+  const locationUpdate = {
+    type: 'artistLocation',
+    clientId,
+    lat: message.location.lat,
+    lng: message.location.lng,
+    active: true
+  };
+  
+  clients.forEach((targetClient, targetId) => {
+    if (targetClient.ws.readyState === 1) {
+      targetClient.ws.send(JSON.stringify(locationUpdate));
+    }
+  });
+}
+
+// Handle geo viewport update
+function handleGeoViewportUpdate(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client || !message.viewport) return;
+  
+  client.geoViewport = message.viewport;
+  console.log(`[GeoViewport] Updated for ${clientId}:`, message.viewport.bounds);
+  
+  // Load drawings for the new viewport
+  loadGeoDrawingsForClient(clientId, message.viewport.bounds);
+}
+
+// Load geo drawings for a client's viewport
+async function loadGeoDrawingsForClient(clientId, bounds) {
+  const client = clients.get(clientId);
+  if (!client) return;
+  
+  try {
+    const drawings = await geoDrawingPersistence.loadGeoDrawings(bounds, 500);
+    
+    // Send in batches
+    const batchSize = 50;
+    for (let i = 0; i < drawings.length; i += batchSize) {
+      const batch = drawings.slice(i, i + batchSize);
+      
+      client.ws.send(JSON.stringify({
+        type: 'geoDrawingHistory',
+        drawings: batch,
+        batchIndex: Math.floor(i / batchSize),
+        totalBatches: Math.ceil(drawings.length / batchSize)
+      }));
+      
+      if (i + batchSize < drawings.length) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load geo drawings:', error);
+  }
+}
+
+// Handle world artwork request
+async function handleRequestWorldArtwork(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client) return;
+  
+  try {
+    // Get heatmap data
+    const hotspots = await geoDrawingPersistence.getWorldHeatmap();
+    const stats = await geoDrawingPersistence.getGlobalStats();
+    
+    client.ws.send(JSON.stringify({
+      type: 'worldArtworkData',
+      hotspots,
+      stats: {
+        totalArtists: clients.size,
+        totalDrawings: stats.totalPaths,
+        activeCountries: stats.activeCountries
+      }
+    }));
+  } catch (error) {
+    console.error('Failed to get world artwork data:', error);
+  }
 }
 
 // Graceful shutdown
