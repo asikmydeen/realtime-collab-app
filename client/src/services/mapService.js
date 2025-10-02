@@ -17,14 +17,16 @@ export class MapService {
 
   // Convert lat/lng to tile coordinates
   latLngToTile(lat, lng, zoom) {
+    // Ensure zoom is an integer for tile calculations
+    const integerZoom = Math.floor(zoom);
     const latRad = lat * Math.PI / 180;
-    const n = Math.pow(2, zoom);
+    const n = Math.pow(2, integerZoom);
     const x = (lng + 180) / 360 * n;
     const y = (1 - Math.asinh(Math.tan(latRad)) / Math.PI) / 2 * n;
     return {
       x: Math.floor(x),
       y: Math.floor(y),
-      zoom
+      zoom: integerZoom
     };
   }
 
@@ -79,7 +81,9 @@ export class MapService {
 
   // Load a tile image
   async loadTile(x, y, zoom) {
-    const key = `${zoom}/${x}/${y}`;
+    // Ensure zoom is an integer
+    const integerZoom = Math.floor(zoom);
+    const key = `${integerZoom}/${x}/${y}`;
     
     // Check cache
     if (this.tileCache.has(key)) {
@@ -108,14 +112,16 @@ export class MapService {
         reject(new Error(`Failed to load tile ${key}`));
       };
       
-      img.src = this.getTileUrl(x, y, zoom);
+      img.src = this.getTileUrl(x, y, integerZoom);
     });
   }
 
   // Get all tiles needed for a viewport
   getTilesForViewport(bounds, zoom) {
+    // Always use integer zoom levels for tiles
+    const integerZoom = Math.floor(zoom);
     // If overzoomed, get tiles at max zoom level
-    const effectiveZoom = Math.min(zoom, this.tileMaxZoom);
+    const effectiveZoom = Math.min(integerZoom, this.tileMaxZoom);
     
     const topLeft = this.latLngToTile(bounds.north, bounds.west, effectiveZoom);
     const bottomRight = this.latLngToTile(bounds.south, bounds.east, effectiveZoom);

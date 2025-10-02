@@ -193,7 +193,6 @@ export function GeoCanvas(props) {
     
     const tiles = mapService.getTilesForViewport(bounds, mapZoom());
     const loading = new Set(tilesLoading());
-    const currentZoom = mapZoom();
     
     for (const tile of tiles) {
       const key = `${tile.zoom}/${tile.x}/${tile.y}`;
@@ -291,28 +290,35 @@ export function GeoCanvas(props) {
   function renderMapTiles(ctx) {
     const vp = viewport();
     const zoom = mapZoom();
+    const integerZoom = Math.floor(zoom);
+    const fractionalZoom = zoom - integerZoom;
+    
+    // Calculate scale for fractional zoom
+    const fractionalScale = Math.pow(2, fractionalZoom);
     
     // Handle overzooming - scale tiles if beyond max tile zoom
-    const isOverzoomed = zoom > mapService.tileMaxZoom;
-    const zoomDiff = zoom - mapService.tileMaxZoom;
-    const scale = isOverzoomed ? Math.pow(2, zoomDiff) : 1;
-    const scaledTileSize = mapService.tileSize * scale;
+    const isOverzoomed = integerZoom > mapService.tileMaxZoom;
+    const zoomDiff = integerZoom - mapService.tileMaxZoom;
+    const overzoomScale = isOverzoomed ? Math.pow(2, zoomDiff) : 1;
+    const totalScale = overzoomScale * fractionalScale;
+    const scaledTileSize = mapService.tileSize * totalScale;
     
-    // Apply image smoothing for overzoomed tiles
-    ctx.imageSmoothingEnabled = !isOverzoomed;
+    // Apply image smoothing
+    ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     
     loadedTiles().forEach(({ img, tile }) => {
       // For overzoomed tiles, we need to render the lower zoom tiles scaled up
       const tileShouldRender = isOverzoomed 
         ? tile.zoom === mapService.tileMaxZoom
-        : tile.zoom === zoom;
+        : tile.zoom === integerZoom;
         
       if (!tileShouldRender) return;
       
-      // Calculate tile position in world pixels
-      const tileWorldX = tile.x * scaledTileSize;
-      const tileWorldY = tile.y * scaledTileSize;
+      // Calculate tile position in world pixels with fractional zoom adjustment
+      const baseTileSize = mapService.tileSize * overzoomScale;
+      const tileWorldX = tile.x * baseTileSize * fractionalScale;
+      const tileWorldY = tile.y * baseTileSize * fractionalScale;
       
       // Convert to canvas coordinates
       const canvasX = tileWorldX - vp.x;
@@ -534,7 +540,7 @@ export function GeoCanvas(props) {
     e.preventDefault();
     
     // Calculate zoom delta with sensitivity adjustment
-    const zoomSensitivity = 0.002; // Adjust this to control zoom speed
+    const zoomSensitivity = 0.001; // Reduced for slower zoom
     const delta = e.deltaY * zoomSensitivity;
     
     // Update target zoom with fractional values
@@ -575,7 +581,7 @@ export function GeoCanvas(props) {
       }
       
       // Smooth interpolation
-      const smoothing = 0.15; // Adjust for smoother/snappier zoom
+      const smoothing = 0.08; // Reduced for smoother zoom animation
       const newZoom = current + diff * smoothing;
       
       // Update zoom and viewport
