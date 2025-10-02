@@ -192,31 +192,32 @@ export function ActivityCanvas(props) {
         }
       } else {
         setIsDrawing(true);
-      
-      const rect = canvasRef.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      
-      // Start new path
-      const newPath = {
-        color: props.color || '#000000',
-        size: props.brushSize || 3,
-        points: [{ x, y }],
-        pathId: `${props.wsManager?.clientId}_${Date.now()}`,
-        clientId: props.wsManager?.clientId,
-        userHash: props.wsManager?.userHash
-      };
-      
-      setPaths(prev => [...prev, newPath]);
-      
-      // Send draw start
-      sendThrottledDraw({
-        drawType: 'start',
-        x,
-        y,
-        color: props.color || '#000000',
-        size: props.brushSize || 3
-      });
+        
+        const rect = canvasRef.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        // Start new path
+        const newPath = {
+          color: props.color || '#000000',
+          size: props.brushSize || 3,
+          points: [{ x, y }],
+          pathId: `${props.wsManager?.clientId}_${Date.now()}`,
+          clientId: props.wsManager?.clientId,
+          userHash: props.wsManager?.userHash
+        };
+        
+        setPaths(prev => [...prev, newPath]);
+        
+        // Send draw start
+        sendThrottledDraw({
+          drawType: 'start',
+          x,
+          y,
+          color: props.color || '#000000',
+          size: props.brushSize || 3
+        });
+      }
     }
   }
   
