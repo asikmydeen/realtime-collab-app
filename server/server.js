@@ -396,6 +396,14 @@ connectionManager.on('connection', async (ws, req) => {
         case 'removeUserDrawing':
           handleRemoveUserDrawing(clientId, message);
           break;
+          
+        case 'requestContribution':
+          handleRequestContribution(clientId, message);
+          break;
+          
+        case 'approveContributor':
+          handleApproveContributor(clientId, message);
+          break;
 
         default:
           console.log('Unknown message type:', message.type);
@@ -1598,6 +1606,140 @@ async function handleRemoveUserDrawing(clientId, message) {
       type: 'error',
       message: 'Failed to remove drawing'
     }));
+  }
+}
+
+// Handle contribution request
+async function handleRequestContribution(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client || !message.activityId) return;
+  
+  try {
+    // Load activity
+    const activity = await activityPersistence.getActivity(message.activityId);
+    if (!activity) return;
+    
+    // Check if user is already approved or banned
+    if (activity.permissions?.approvedContributors?.includes(client.userHash)) {
+      client.ws.send(JSON.stringify({
+        type: 'contributionStatus',
+        status: 'already_approved'
+      }));
+      return;
+    }
+    
+    if (activity.permissions?.bannedUsers?.includes(client.userHash)) {
+      client.ws.send(JSON.stringify({
+        type: 'contributionStatus',
+        status: 'banned'
+      }));
+      return;
+    }
+    
+    // Add to requests if not already there
+    if (!activity.permissions.contributorRequests) {
+      activity.permissions.contributorRequests = [];
+    }
+    
+    const existingRequest = activity.permissions.contributorRequests.find(
+      req => req.userHash === client.userHash
+    );
+    
+    if (!existingRequest) {
+      activity.permissions.contributorRequests.push({
+        userHash: client.userHash,
+        clientId: clientId,
+        timestamp: Date.now()
+      });
+      
+      // Update activity
+      await activityPersistence.updateActivity(message.activityId, activity);
+      
+      // Notify the owner
+      const ownerClients = Array.from(clients.entries())
+        .filter(([_, c]) => c.userHash === activity.ownerId);
+      
+      ownerClients.forEach(([_, ownerClient]) => {
+        ownerClient.ws.send(JSON.stringify({
+          type: 'contributionRequest',
+          activityId: message.activityId,
+          activityTitle: activity.title,
+          requester: {
+            userHash: client.userHash,
+            clientId: clientId
+          }
+        }));
+      });
+    }
+    
+    client.ws.send(JSON.stringify({
+      type: 'contributionStatus',
+      status: 'requested'
+    }));
+    
+  } catch (error) {
+    console.error('Failed to handle contribution request:', error);
+  }
+}
+
+// Handle contributor approval
+async function handleApproveContributor(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client || !message.activityId || !message.userHash) return;
+  
+  try {
+    // Load activity
+    const activity = await activityPersistence.getActivity(message.activityId);
+    if (!activity) return;
+    
+    // Check if user is owner
+    if (activity.ownerId !== client.userHash) {
+      client.ws.send(JSON.stringify({
+        type: 'error',
+        message: 'Only the owner can approve contributors'
+      }));
+      return;
+    }
+    
+    // Add to approved contributors
+    if (!activity.permissions.approvedContributors) {
+      activity.permissions.approvedContributors = [];
+    }
+    
+    if (!activity.permissions.approvedContributors.includes(message.userHash)) {
+      activity.permissions.approvedContributors.push(message.userHash);
+    }
+    
+    // Remove from requests
+    if (activity.permissions.contributorRequests) {
+      activity.permissions.contributorRequests = activity.permissions.contributorRequests.filter(
+        req => req.userHash !== message.userHash
+      );
+    }
+    
+    // Update activity
+    await activityPersistence.updateActivity(message.activityId, activity);
+    
+    // Notify the approved user
+    const approvedClients = Array.from(clients.entries())
+      .filter(([_, c]) => c.userHash === message.userHash);
+    
+    approvedClients.forEach(([_, approvedClient]) => {
+      approvedClient.ws.send(JSON.stringify({
+        type: 'contributionStatus',
+        status: 'approved',
+        activityId: message.activityId
+      }));
+    });
+    
+    // Broadcast to all participants
+    broadcastToActivity(message.activityId, {
+      type: 'activityUpdate',
+      activity: activity
+    });
+    
+  } catch (error) {
+    console.error('Failed to approve contributor:', error);
   }
 }
 

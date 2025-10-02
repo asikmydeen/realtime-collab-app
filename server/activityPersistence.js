@@ -87,7 +87,9 @@ export class ActivityPersistence {
         drawingCount: 0,
         isDefault: false,
         permissions: {
-          allowContributions: true, // Default to allow contributions
+          allowContributions: false, // Default to view-only mode
+          contributorRequests: [], // List of users requesting to contribute
+          approvedContributors: [data.ownerId], // Owner is always approved
           bannedUsers: [], // List of banned user hashes
           moderators: [] // List of user hashes who can moderate
         }
@@ -384,6 +386,19 @@ export class ActivityPersistence {
   }
   
   // Update activity permissions
+  async updateActivity(activityId, activityData) {
+    if (!this.redis || !activityId) return false;
+    
+    try {
+      await this.redis.set(`${this.keyPrefix}${activityId}`, JSON.stringify(activityData));
+      console.log(`[Activity] Updated activity: ${activityId}`);
+      return true;
+    } catch (error) {
+      console.error('Failed to update activity:', error);
+      return false;
+    }
+  }
+  
   async updateActivityPermissions(activityId, permissions) {
     if (!this.redis) return false;
     

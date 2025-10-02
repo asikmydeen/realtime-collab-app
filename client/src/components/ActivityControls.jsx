@@ -1,14 +1,30 @@
-import { createSignal, Show, For } from 'solid-js';
+import { createSignal, Show, For, createEffect, onCleanup } from 'solid-js';
 
 export function ActivityControls(props) {
   const [showSettings, setShowSettings] = createSignal(false);
   const [allowContributions, setAllowContributions] = createSignal(
-    props.activity?.permissions?.allowContributions ?? true
+    props.activity?.permissions?.allowContributions ?? false
+  );
+  const [contributorRequests, setContributorRequests] = createSignal(
+    props.activity?.permissions?.contributorRequests || []
   );
   
   const isOwner = () => {
     return props.wsManager?.userHash === props.activity?.ownerId;
   };
+  
+  // Handle incoming contribution requests
+  createEffect(() => {
+    if (props.wsManager && isOwner()) {
+      const cleanup = props.wsManager.on('contributionRequest', (data) => {
+        if (data.activityId === props.activity?.id) {
+          setContributorRequests(prev => [...prev, data.requester]);
+        }
+      });
+      
+      onCleanup(cleanup);
+    }
+  });
   
   const handleToggleContributions = () => {
     const newValue = !allowContributions();
@@ -88,6 +104,65 @@ export function ActivityControls(props) {
               <div>👑 You own this activity</div>
               <div>📍 Created at {props.activity.street}</div>
             </div>
+            
+            <Show when={contributorRequests().length > 0}>
+              <div style={{
+                'margin-top': '15px',
+                'border-top': '1px solid rgba(255, 255, 255, 0.2)',
+                'padding-top': '15px'
+              }}>
+                <div style={{
+                  'font-weight': 'bold',
+                  'margin-bottom': '10px',
+                  'font-size': '13px'
+                }}>
+                  Contribution Requests ({contributorRequests().length})
+                </div>
+                <For each={contributorRequests()}>
+                  {(request) => (
+                    <div style={{
+                      display: 'flex',
+                      'align-items': 'center',
+                      'justify-content': 'space-between',
+                      'margin-bottom': '8px',
+                      padding: '6px',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      'border-radius': '4px'
+                    }}>
+                      <span style={{ 'font-size': '11px' }}>
+                        User {request.clientId.slice(-4)}
+                      </span>
+                      <button
+                        onClick={() => {
+                          if (props.wsManager) {
+                            props.wsManager.send({
+                              type: 'approveContributor',
+                              activityId: props.activity.id,
+                              userHash: request.userHash
+                            });
+                            // Remove from local list
+                            setContributorRequests(prev => 
+                              prev.filter(r => r.userHash !== request.userHash)
+                            );
+                          }
+                        }}
+                        style={{
+                          padding: '2px 8px',
+                          background: '#22c55e',
+                          color: 'white',
+                          border: 'none',
+                          'border-radius': '3px',
+                          'font-size': '10px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Approve
+                      </button>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </Show>
             
             <button
               onClick={props.onToggleSelectMode}
