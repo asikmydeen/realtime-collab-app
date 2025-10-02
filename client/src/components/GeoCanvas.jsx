@@ -13,6 +13,12 @@ export function GeoCanvas(props) {
   const [isLoadingLocation, setIsLoadingLocation] = createSignal(true);
   const [locationName, setLocationName] = createSignal('');
   
+  // Search state
+  const [showSearch, setShowSearch] = createSignal(false);
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const [searchResults, setSearchResults] = createSignal([]);
+  const [isSearching, setIsSearching] = createSignal(false);
+  
   // Drawing state (reuse from SimpleWorldCanvas)
   const [isDrawing, setIsDrawing] = createSignal(false);
   const [isPanning, setIsPanning] = createSignal(false);
@@ -21,7 +27,7 @@ export function GeoCanvas(props) {
   
   // Drawing paths
   const [drawnPaths, setDrawnPaths] = createSignal([]);
-  const remotePaths = new Map();
+  const [remotePaths, setRemotePaths] = createSignal(new Map());
   
   // Tiles state
   const [loadedTiles, setLoadedTiles] = createSignal(new Map());
@@ -72,6 +78,17 @@ export function GeoCanvas(props) {
         
         if (!zoomAnimationFrame) {
           animateZoom(centerX, centerY, centerLatLng);
+        }
+      } else if (e.key === '/' || (e.ctrlKey && e.key === 'k')) {
+        // Open search with / or Ctrl+K
+        e.preventDefault();
+        setShowSearch(true);
+      } else if (e.key === 'Escape') {
+        // Close search
+        if (showSearch()) {
+          setShowSearch(false);
+          setSearchQuery('');
+          setSearchResults([]);
         }
       }
     };
@@ -344,7 +361,7 @@ export function GeoCanvas(props) {
     const zoom = mapZoom();
     
     // Render all paths
-    const allPaths = [...drawnPaths(), ...Array.from(remotePaths.values())];
+    const allPaths = [...drawnPaths(), ...Array.from(remotePaths().values())];
     
     allPaths.forEach(path => {
       ctx.beginPath();
@@ -742,34 +759,48 @@ export function GeoCanvas(props) {
   });
   
   function handleRemoteGeoDraw(data) {
+    console.log('[RemoteGeoDraw] Received:', data.drawType, 'from', data.clientId);
+    
     switch(data.drawType) {
       case 'start':
-        remotePaths.set(data.clientId, {
-          color: data.color || '#000000',
-          size: data.size || 3,
-          points: [{ lat: data.lat, lng: data.lng }]
+        setRemotePaths(prev => {
+          const next = new Map(prev);
+          next.set(data.clientId, {
+            color: data.color || '#000000',
+            size: data.size || 3,
+            points: [{ lat: data.lat, lng: data.lng }]
+          });
+          return next;
         });
         break;
         
       case 'draw':
-        let path = remotePaths.get(data.clientId);
-        if (!path) {
-          path = {
-            color: data.color || '#000000',
-            size: data.size || 3,
-            points: []
-          };
-          remotePaths.set(data.clientId, path);
-        }
-        path.points.push({ lat: data.lat, lng: data.lng });
+        setRemotePaths(prev => {
+          const next = new Map(prev);
+          let path = next.get(data.clientId);
+          if (!path) {
+            path = {
+              color: data.color || '#000000',
+              size: data.size || 3,
+              points: []
+            };
+            next.set(data.clientId, path);
+          }
+          path.points.push({ lat: data.lat, lng: data.lng });
+          return next;
+        });
         break;
         
       case 'end':
-        const finishedPath = remotePaths.get(data.clientId);
-        if (finishedPath && finishedPath.points.length > 1) {
-          setDrawnPaths(prev => [...prev, finishedPath]);
-        }
-        remotePaths.delete(data.clientId);
+        setRemotePaths(prev => {
+          const next = new Map(prev);
+          const finishedPath = next.get(data.clientId);
+          if (finishedPath && finishedPath.points.length > 1) {
+            setDrawnPaths(paths => [...paths, { ...finishedPath }]);
+          }
+          next.delete(data.clientId);
+          return next;
+        });
         break;
     }
     
@@ -784,6 +815,13 @@ export function GeoCanvas(props) {
     }
   });
   
+  // Re-render when remote paths change
+  createEffect(() => {
+    // Trigger on remotePaths change
+    remotePaths();
+    renderCanvas();
+  });
+  
   onCleanup(() => {
     if (drawingThrottle.timeoutId) {
       clearTimeout(drawingThrottle.timeoutId);
@@ -796,6 +834,96 @@ export function GeoCanvas(props) {
     }
   });
   
+  // Search for places
+  async function handleSearch() {
+    const query = searchQuery().trim();
+    if (!query || isSearching()) return;
+    
+    setIsSearching(true);
+    try {
+      const results = await mapService.searchPlaces(query);
+      setSearchResults(results);
+    } catch (error) {
+      console.error('Search failed:', error);
+      setSearchResults([]);
+    }
+    setIsSearching(false);
+  }
+  
+  // Navigate to a search result
+  function navigateToPlace(place) {
+    console.log(`📍 Navigating to ${place.name}`);
+    
+    const targetLat = place.lat;
+    const targetLng = place.lng;
+    const targetZoomLevel = 18; // Street level to see drawings
+    
+    // Update location name immediately
+    setLocationName(place.city || place.name.split(',')[0]);
+    
+    // Close search
+    setShowSearch(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    
+    // Animate to the new location
+    animateToLocation(targetLat, targetLng, targetZoomLevel);
+    
+    // Notify server of new location
+    if (props.wsManager) {
+      props.wsManager.send({
+        type: 'setLocation',
+        location: { lat: targetLat, lng: targetLng, zoom: targetZoomLevel }
+      });
+    }
+  }
+  
+  // Animate smoothly to a new location
+  function animateToLocation(targetLat, targetLng, targetZoomLevel) {
+    // Set target zoom
+    setTargetZoom(targetZoomLevel);
+    
+    // Get current and target positions
+    const currentZoom = mapZoom();
+    const vp = viewport();
+    const currentCenter = mapService.worldPixelToLatLng(
+      vp.x + canvasRef.width / 2,
+      vp.y + canvasRef.height / 2,
+      currentZoom
+    );
+    
+    // Animation parameters
+    const duration = 2000; // 2 seconds
+    const startTime = Date.now();
+    const startLat = currentCenter.lat;
+    const startLng = currentCenter.lng;
+    const startZoom = currentZoom;
+    
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Smooth easing
+      const eased = 1 - Math.pow(1 - progress, 3);
+      
+      // Interpolate position and zoom
+      const currentLat = startLat + (targetLat - startLat) * eased;
+      const currentLng = startLng + (targetLng - startLng) * eased;
+      const currentZoom = startZoom + (targetZoomLevel - startZoom) * eased;
+      
+      // Update viewport
+      setMapZoom(currentZoom);
+      updateViewport(currentLat, currentLng, currentZoom);
+      
+      // Continue animation
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+    
+    requestAnimationFrame(animate);
+  }
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       {isLoadingLocation() && (
@@ -861,35 +989,168 @@ export function GeoCanvas(props) {
         onWheel={handleWheel}
       />
       
-      {/* Location and zoom indicator */}
+      {/* Location and zoom indicator with search button */}
       {locationName() && (
         <div style={{
           position: 'absolute',
           top: '20px',
           left: '50%',
           transform: 'translateX(-50%)',
-          background: 'rgba(0, 0, 0, 0.8)',
-          color: 'white',
-          padding: '10px 20px',
-          'border-radius': '20px',
-          'font-size': '14px',
-          'backdrop-filter': 'blur(10px)',
-          'pointer-events': 'none'
+          display: 'flex',
+          'align-items': 'center',
+          gap: '15px'
         }}>
-          {mapZoom() >= mapService.drawingMinZoom ? (
-            <>
-              ✏️ Drawing at {locationName()} • Zoom: {mapZoom()}
-              <span style={{ color: '#4ade80', 'margin-left': '10px' }}>
-                (~{Math.pow(2, 22 - mapZoom()).toFixed(1)}m precision)
-              </span>
-            </>
-          ) : (
-            <>
-              🗺️ Exploring {locationName()} • Zoom: {mapZoom()}
-              <span style={{ color: '#60a5fa', 'margin-left': '10px' }}>
-                (Zoom to {mapService.drawingMinZoom}+ to draw)
-              </span>
-            </>
+          <button
+            onClick={() => setShowSearch(!showSearch())}
+            style={{
+              background: 'rgba(0, 0, 0, 0.8)',
+              color: 'white',
+              padding: '10px 15px',
+              'border-radius': '20px',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              'align-items': 'center',
+              gap: '8px',
+              'font-size': '14px',
+              'backdrop-filter': 'blur(10px)',
+              transition: 'all 0.2s',
+              '&:hover': {
+                background: 'rgba(0, 0, 0, 0.9)'
+              }
+            }}
+          >
+            🔍 Search Places
+          </button>
+          
+          <div style={{
+            background: 'rgba(0, 0, 0, 0.8)',
+            color: 'white',
+            padding: '10px 20px',
+            'border-radius': '20px',
+            'font-size': '14px',
+            'backdrop-filter': 'blur(10px)',
+            'pointer-events': 'none'
+          }}>
+            {mapZoom() >= mapService.drawingMinZoom ? (
+              <>
+                ✏️ Drawing at {locationName()} • Zoom: {mapZoom().toFixed(1)}
+                <span style={{ color: '#4ade80', 'margin-left': '10px' }}>
+                  (~{Math.pow(2, 22 - mapZoom()).toFixed(1)}m precision)
+                </span>
+              </>
+            ) : (
+              <>
+                🗺️ Exploring {locationName()} • Zoom: {mapZoom().toFixed(1)}
+                <span style={{ color: '#60a5fa', 'margin-left': '10px' }}>
+                  (Zoom to {mapService.drawingMinZoom}+ to draw)
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Search UI */}
+      {showSearch() && (
+        <div style={{
+          position: 'absolute',
+          top: '80px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '400px',
+          background: 'rgba(0, 0, 0, 0.9)',
+          'border-radius': '15px',
+          padding: '20px',
+          'backdrop-filter': 'blur(10px)',
+          'box-shadow': '0 4px 30px rgba(0, 0, 0, 0.5)',
+          'z-index': 1000
+        }}>
+          <div style={{ display: 'flex', gap: '10px', 'margin-bottom': '15px' }}>
+            <input
+              type="text"
+              placeholder="Search for a place..."
+              value={searchQuery()}
+              onInput={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSearch();
+              }}
+              style={{
+                flex: 1,
+                padding: '10px 15px',
+                'border-radius': '10px',
+                border: 'none',
+                background: 'rgba(255, 255, 255, 0.1)',
+                color: 'white',
+                'font-size': '14px',
+                outline: 'none'
+              }}
+            />
+            <button
+              onClick={handleSearch}
+              disabled={isSearching()}
+              style={{
+                padding: '10px 20px',
+                'border-radius': '10px',
+                border: 'none',
+                background: '#4ade80',
+                color: 'black',
+                'font-weight': 'bold',
+                cursor: isSearching() ? 'not-allowed' : 'pointer',
+                opacity: isSearching() ? 0.5 : 1,
+                transition: 'all 0.2s'
+              }}
+            >
+              {isSearching() ? '...' : 'Search'}
+            </button>
+          </div>
+          
+          {searchResults().length > 0 && (
+            <div style={{ 'max-height': '300px', 'overflow-y': 'auto' }}>
+              {searchResults().map(place => (
+                <button
+                  onClick={() => navigateToPlace(place)}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    'margin-bottom': '8px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    'border-radius': '8px',
+                    color: 'white',
+                    'text-align': 'left',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    '&:hover': {
+                      background: 'rgba(255, 255, 255, 0.1)'
+                    }
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = 'rgba(255, 255, 255, 0.1)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = 'rgba(255, 255, 255, 0.05)';
+                  }}
+                >
+                  <div style={{ 'font-size': '14px', 'font-weight': '500' }}>
+                    📍 {place.city || place.type || 'Location'}
+                  </div>
+                  <div style={{ 'font-size': '12px', opacity: 0.7, 'margin-top': '4px' }}>
+                    {place.name}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+          
+          {searchResults().length === 0 && searchQuery() && !isSearching() && (
+            <div style={{ 
+              color: 'rgba(255, 255, 255, 0.5)', 
+              'text-align': 'center',
+              padding: '20px'
+            }}>
+              No results found
+            </div>
           )}
         </div>
       )}
@@ -913,6 +1174,7 @@ export function GeoCanvas(props) {
             <div>⇧ + Drag to move</div>
             <div>🔍 Scroll to zoom</div>
             <div>⌨️ +/- keys to zoom</div>
+            <div>/ Search places</div>
           </>
         ) : (
           <>
@@ -920,6 +1182,7 @@ export function GeoCanvas(props) {
             <div>🖱️ Drag to explore</div>
             <div>🔍 Zoom in to draw</div>
             <div>⌨️ +/- keys to zoom</div>
+            <div>/ Search places</div>
           </>
         )}
       </div>

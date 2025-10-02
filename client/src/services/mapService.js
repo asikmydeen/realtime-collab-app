@@ -185,6 +185,34 @@ export class MapService {
     
     return null;
   }
+
+  // Search for places by name
+  async searchPlaces(query) {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?` +
+        `format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        return data.map(place => ({
+          id: place.place_id,
+          name: place.display_name,
+          lat: parseFloat(place.lat),
+          lng: parseFloat(place.lon),
+          type: place.type,
+          city: place.address?.city || place.address?.town || place.address?.village,
+          country: place.address?.country,
+          boundingbox: place.boundingbox?.map(coord => parseFloat(coord))
+        }));
+      }
+    } catch (error) {
+      console.error('Place search failed:', error);
+    }
+    
+    return [];
+  }
 }
 
 export const mapService = new MapService();

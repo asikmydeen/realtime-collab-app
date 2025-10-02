@@ -990,11 +990,8 @@ function handleGeoDraw(clientId, message) {
   clients.forEach((targetClient, targetId) => {
     if (targetId !== clientId && targetClient.ws.readyState === 1) {
       broadcastCount++;
-      messageBatcher.addMessage(targetId, broadcastMessage, (data) => {
-        if (targetClient.ws.readyState === 1) {
-          targetClient.ws.send(data);
-        }
-      });
+      // Send geo draw messages immediately for real-time updates
+      targetClient.ws.send(JSON.stringify(broadcastMessage));
     }
   });
   
