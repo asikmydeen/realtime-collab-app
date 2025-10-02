@@ -370,6 +370,10 @@ connectionManager.on('connection', (ws, req) => {
         case 'activityDraw':
           handleActivityDraw(clientId, message);
           break;
+          
+        case 'getDefaultActivity':
+          handleGetDefaultActivity(clientId, message);
+          break;
 
         default:
           console.log('Unknown message type:', message.type);
@@ -1334,6 +1338,56 @@ function broadcastActivityUpdate(activity) {
       }
     }
   });
+}
+
+// Handle default activity
+async function handleGetDefaultActivity(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client) return;
+  
+  try {
+    const activity = await activityPersistence.getOrCreateDefaultActivity({
+      lat: message.lat,
+      lng: message.lng,
+      locationName: message.locationName,
+      address: message.address,
+      street: message.street || 'Community Area'
+    });
+    
+    console.log(`[Activity] Got default activity: ${activity.id} for ${activity.street}`);
+    
+    // Auto-join the default activity
+    client.currentActivity = activity.id;
+    
+    // Load canvas data
+    const canvasData = await activityPersistence.loadActivityCanvas(activity.id);
+    
+    client.ws.send(JSON.stringify({
+      type: 'defaultActivity',
+      activity,
+      canvasData: canvasData || { paths: [] }
+    }));
+    
+    // Update participant count
+    const participants = getActivityParticipants(activity.id);
+    await activityPersistence.updateActivityStats(activity.id, {
+      participantCount: participants.size
+    });
+    
+    // Notify other participants
+    broadcastToActivity(activity.id, {
+      type: 'participantJoined',
+      clientId,
+      username: client.username
+    }, clientId);
+    
+  } catch (error) {
+    console.error('Failed to get default activity:', error);
+    client.ws.send(JSON.stringify({
+      type: 'error',
+      message: 'Failed to get default activity'
+    }));
+  }
 }
 
 // Graceful shutdown

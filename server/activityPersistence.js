@@ -6,6 +6,60 @@ export class ActivityPersistence {
     this.defaultPrecision = 7; // Street level geohash precision
   }
 
+  // Get or create default activity for a location
+  async getOrCreateDefaultActivity(data) {
+    if (!this.redis) return null;
+
+    try {
+      const geohash = await this.getGeohash(data.lat, data.lng, 6); // Use less precision for wider area
+      const defaultKey = `${this.keyPrefix}default:${geohash}`;
+      
+      // Check if default activity exists for this area
+      const existingId = await this.redis.get(defaultKey);
+      if (existingId) {
+        const activity = await this.redis.get(`${this.keyPrefix}${existingId}`);
+        if (activity) {
+          return JSON.parse(activity);
+        }
+      }
+      
+      // Create default activity for this location
+      const activityId = `default_${geohash}_${Date.now()}`;
+      const activity = {
+        id: activityId,
+        title: `${data.locationName || 'Local'} Canvas`,
+        description: 'Community canvas for this area',
+        isDefault: true,
+        creatorId: 'system',
+        creatorName: 'System',
+        lat: data.lat,
+        lng: data.lng,
+        geohash: await this.getGeohash(data.lat, data.lng),
+        address: data.address || '',
+        street: data.street || 'Community Area',
+        createdAt: Date.now(),
+        lastActive: Date.now(),
+        participantCount: 0,
+        drawingCount: 0
+      };
+
+      // Store activity
+      await this.redis.set(`${this.keyPrefix}${activityId}`, JSON.stringify(activity));
+      await this.redis.set(defaultKey, activityId);
+
+      // Add to indices
+      for (let precision = 4; precision <= this.defaultPrecision; precision++) {
+        const hash = activity.geohash.substring(0, precision);
+        await this.redis.sAdd(`${this.keyPrefix}geo:${hash}`, activityId);
+      }
+
+      return activity;
+    } catch (error) {
+      console.error('Failed to get/create default activity:', error);
+      throw error;
+    }
+  }
+
   // Create a new activity at a location
   async createActivity(data) {
     if (!this.redis) return null;
@@ -28,7 +82,8 @@ export class ActivityPersistence {
         createdAt: Date.now(),
         lastActive: Date.now(),
         participantCount: 1,
-        drawingCount: 0
+        drawingCount: 0,
+        isDefault: false
       };
 
       // Store activity

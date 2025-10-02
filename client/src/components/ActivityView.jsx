@@ -90,12 +90,20 @@ export function ActivityView(props) {
         }
         
         updateViewport(lat, lng, mapZoom());
+        
+        // Request default activity for this location
+        requestDefaultActivity(lat, lng, location);
       } catch (error) {
         console.error('Failed to get location:', error);
         // Fallback to default location
-        setUserLocation({ lat: 40.7128, lng: -74.0060 }); // NYC
+        const defaultLat = 40.7128;
+        const defaultLng = -74.0060;
+        setUserLocation({ lat: defaultLat, lng: defaultLng }); // NYC
         setLocationName('New York');
-        updateViewport(40.7128, -74.0060, mapZoom());
+        updateViewport(defaultLat, defaultLng, mapZoom());
+        
+        // Request default activity for fallback location
+        requestDefaultActivity(defaultLat, defaultLng, { city: 'New York' });
       }
     }
   }
@@ -127,7 +135,18 @@ export function ActivityView(props) {
     });
     
     loadTilesForCurrentView();
-    requestActivities();
+    
+    // Request activities immediately when zoomed in to street level
+    if (zoom >= 17) {
+      if (props.wsManager && bounds) {
+        props.wsManager.send({
+          type: 'getActivities',
+          bounds: bounds,
+          zoom: zoom
+        });
+      }
+    }
+    requestActivities(); // Also queue a delayed request for stability
   }
   
   async function loadTilesForCurrentView() {
@@ -308,7 +327,7 @@ export function ActivityView(props) {
           zoom: mapZoom()
         });
       }
-    }, 200);
+    }, 50); // Reduced from 200ms to 50ms for faster loading
   }
   
   // Handle activity selection
@@ -323,6 +342,31 @@ export function ActivityView(props) {
         activityId: activity.id
       });
     }
+  }
+  
+  // Request default activity for a location
+  function requestDefaultActivity(lat, lng, locationInfo) {
+    if (!props.wsManager) {
+      // If WebSocket not ready yet, try again in a bit
+      setTimeout(() => requestDefaultActivity(lat, lng, locationInfo), 500);
+      return;
+    }
+    
+    // Check if connected
+    if (!props.connected) {
+      // If not connected yet, wait for connection
+      setTimeout(() => requestDefaultActivity(lat, lng, locationInfo), 500);
+      return;
+    }
+    
+    props.wsManager.send({
+      type: 'getDefaultActivity',
+      lat,
+      lng,
+      locationName: locationInfo?.city || locationInfo?.name || 'Local',
+      address: locationInfo?.displayName || '',
+      street: locationInfo?.street || locationInfo?.road || 'Community Area'
+    });
   }
   
   // Create new activity
@@ -599,10 +643,25 @@ export function ActivityView(props) {
         renderMap();
       });
       
+      const cleanup4 = props.wsManager.on('defaultActivity', (data) => {
+        // Add default activity to the list
+        setActivities(prev => {
+          const existing = prev.find(a => a.id === data.activity.id);
+          if (!existing) {
+            return [...prev, data.activity];
+          }
+          return prev;
+        });
+        
+        // Automatically select the default activity
+        selectActivity(data.activity);
+      });
+      
       onCleanup(() => {
         cleanup1();
         cleanup2();
         cleanup3();
+        cleanup4();
         if (zoomAnimationFrame) {
           cancelAnimationFrame(zoomAnimationFrame);
         }
@@ -731,17 +790,7 @@ export function ActivityView(props) {
             'overflow-y': 'auto',
             padding: '10px'
           }}>
-            {activities().length === 0 ? (
-              <div style={{
-                'text-align': 'center',
-                padding: '40px 20px',
-                color: '#6b7280'
-              }}>
-                No activities in this area yet.<br/>
-                Be the first to create one!
-              </div>
-            ) : (
-              activities().map(activity => (
+            {activities().map(activity => (
                 <button
                   onClick={() => selectActivity(activity)}
                   style={{
@@ -776,8 +825,7 @@ export function ActivityView(props) {
                     • 🎨 {activity.drawingCount} drawing{activity.drawingCount !== 1 ? 's' : ''}
                   </div>
                 </button>
-              ))
-            )}
+              ))}
           </div>
         </div>
       </Show>
