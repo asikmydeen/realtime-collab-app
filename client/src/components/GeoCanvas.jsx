@@ -9,7 +9,7 @@ export function GeoCanvas(props) {
   // Location and map state
   const [userLocation, setUserLocation] = createSignal(null);
   const [currentBounds, setCurrentBounds] = createSignal(null);
-  const [mapZoom, setMapZoom] = createSignal(18); // Very zoomed in for local drawing
+  const [mapZoom, setMapZoom] = createSignal(21); // Room-level zoom for ultra-local drawing
   const [isLoadingLocation, setIsLoadingLocation] = createSignal(true);
   const [locationName, setLocationName] = createSignal('');
   
@@ -153,6 +153,7 @@ export function GeoCanvas(props) {
     
     const tiles = mapService.getTilesForViewport(bounds, mapZoom());
     const loading = new Set(tilesLoading());
+    const currentZoom = mapZoom();
     
     for (const tile of tiles) {
       const key = `${tile.zoom}/${tile.x}/${tile.y}`;
@@ -229,25 +230,42 @@ export function GeoCanvas(props) {
     const vp = viewport();
     const zoom = mapZoom();
     
+    // Handle overzooming - scale tiles if beyond max tile zoom
+    const isOverzoomed = zoom > mapService.tileMaxZoom;
+    const zoomDiff = zoom - mapService.tileMaxZoom;
+    const scale = isOverzoomed ? Math.pow(2, zoomDiff) : 1;
+    const scaledTileSize = mapService.tileSize * scale;
+    
+    // Apply image smoothing for overzoomed tiles
+    ctx.imageSmoothingEnabled = !isOverzoomed;
+    ctx.imageSmoothingQuality = 'high';
+    
     loadedTiles().forEach(({ img, tile }) => {
-      if (tile.zoom !== zoom) return;
+      // For overzoomed tiles, we need to render the lower zoom tiles scaled up
+      const tileShouldRender = isOverzoomed 
+        ? tile.zoom === mapService.tileMaxZoom
+        : tile.zoom === zoom;
+        
+      if (!tileShouldRender) return;
       
       // Calculate tile position in world pixels
-      const tileWorldX = tile.x * mapService.tileSize;
-      const tileWorldY = tile.y * mapService.tileSize;
+      const tileWorldX = tile.x * scaledTileSize;
+      const tileWorldY = tile.y * scaledTileSize;
       
       // Convert to canvas coordinates
       const canvasX = tileWorldX - vp.x;
       const canvasY = tileWorldY - vp.y;
       
       // Only render if visible
-      if (canvasX + mapService.tileSize >= 0 && 
+      if (canvasX + scaledTileSize >= 0 && 
           canvasX < canvasRef.width &&
-          canvasY + mapService.tileSize >= 0 && 
+          canvasY + scaledTileSize >= 0 && 
           canvasY < canvasRef.height) {
-        ctx.drawImage(img, canvasX, canvasY);
+        ctx.drawImage(img, canvasX, canvasY, scaledTileSize, scaledTileSize);
       }
     });
+    
+    ctx.imageSmoothingEnabled = true;
   }
   
   // Render drawings
@@ -322,10 +340,13 @@ export function GeoCanvas(props) {
       
       setIsDrawing(true);
       
+      // Adjust brush size based on zoom for consistent physical size
+      const zoomAdjustedSize = (props.brushSize || 3) * Math.pow(2, 21 - zoom) * 0.5;
+      
       // Start new path
       const newPath = {
         color: props.color || '#000000',
-        size: props.brushSize || 3,
+        size: zoomAdjustedSize,
         points: [latLng]
       };
       setDrawnPaths(prev => [...prev, newPath]);
@@ -336,7 +357,7 @@ export function GeoCanvas(props) {
         lat: latLng.lat,
         lng: latLng.lng,
         color: props.color || '#000000',
-        size: props.brushSize || 3
+        size: zoomAdjustedSize
       });
     }
   }
@@ -387,13 +408,14 @@ export function GeoCanvas(props) {
         return paths;
       });
       
-      // Send draw update
+      // Send draw update with zoom-adjusted size
+      const zoomAdjustedSize = (props.brushSize || 3) * Math.pow(2, 21 - zoom) * 0.5;
       sendThrottledDraw({
         drawType: 'draw',
         lat: latLng.lat,
         lng: latLng.lng,
         color: props.color || '#000000',
-        size: props.brushSize || 3
+        size: zoomAdjustedSize
       });
       
       renderCanvas();
@@ -699,6 +721,11 @@ export function GeoCanvas(props) {
           'pointer-events': 'none'
         }}>
           📍 {locationName()} • Zoom: {mapZoom()}
+          {mapZoom() >= 20 && (
+            <span style={{ color: '#4ade80', 'margin-left': '10px' }}>
+              (~{Math.pow(2, 22 - mapZoom()).toFixed(1)}m precision)
+            </span>
+          )}
           {mapZoom() < mapService.drawingMinZoom && (
             <span style={{ color: '#ef4444', 'margin-left': '10px' }}>
               (Zoom in to level {mapService.drawingMinZoom}+ to draw)

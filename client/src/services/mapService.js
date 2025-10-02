@@ -4,10 +4,11 @@ export class MapService {
     // Use OpenStreetMap tiles (free and open)
     this.tileServer = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
     this.tileSize = 256;
-    this.defaultZoom = 18; // Building level zoom for local drawing
+    this.defaultZoom = 21; // Room/interior level zoom (using overzoomed tiles)
     this.minZoom = 3; // Continental view
-    this.maxZoom = 19; // Maximum detail
-    this.drawingMinZoom = 16; // Minimum zoom for drawing (neighborhood level)
+    this.maxZoom = 22; // Ultra detailed (beyond standard tile zoom)
+    this.drawingMinZoom = 19; // Minimum zoom for drawing (individual building level)
+    this.tileMaxZoom = 19; // Maximum available tile zoom from OSM
     
     // Cache loaded tiles
     this.tileCache = new Map();
@@ -57,12 +58,23 @@ export class MapService {
     return { lat, lng };
   }
 
-  // Get tile URL
+  // Get tile URL (with overzoom handling)
   getTileUrl(x, y, zoom) {
+    // If zoom is beyond available tiles, use the max zoom tiles
+    const actualZoom = Math.min(zoom, this.tileMaxZoom);
+    
+    // For overzoom, we need to adjust the tile coordinates
+    if (zoom > this.tileMaxZoom) {
+      const zoomDiff = zoom - this.tileMaxZoom;
+      const scale = Math.pow(2, zoomDiff);
+      x = Math.floor(x / scale);
+      y = Math.floor(y / scale);
+    }
+    
     return this.tileServer
       .replace('{x}', x)
       .replace('{y}', y)
-      .replace('{z}', zoom);
+      .replace('{z}', actualZoom);
   }
 
   // Load a tile image
@@ -102,13 +114,16 @@ export class MapService {
 
   // Get all tiles needed for a viewport
   getTilesForViewport(bounds, zoom) {
-    const topLeft = this.latLngToTile(bounds.north, bounds.west, zoom);
-    const bottomRight = this.latLngToTile(bounds.south, bounds.east, zoom);
+    // If overzoomed, get tiles at max zoom level
+    const effectiveZoom = Math.min(zoom, this.tileMaxZoom);
+    
+    const topLeft = this.latLngToTile(bounds.north, bounds.west, effectiveZoom);
+    const bottomRight = this.latLngToTile(bounds.south, bounds.east, effectiveZoom);
     
     const tiles = [];
     for (let x = topLeft.x; x <= bottomRight.x; x++) {
       for (let y = topLeft.y; y <= bottomRight.y; y++) {
-        tiles.push({ x, y, zoom });
+        tiles.push({ x, y, zoom: effectiveZoom });
       }
     }
     
