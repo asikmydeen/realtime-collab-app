@@ -12,5 +12,10 @@
     "vite": "^5.0.10",
     "vite-plugin-solid": "^2.8.0",
     "vite-plugin-wasm": "^3.5.0"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.14"
   }
 }

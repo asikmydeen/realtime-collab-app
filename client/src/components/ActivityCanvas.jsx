@@ -1,10 +1,10 @@
 import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import { ActivityControls } from './ActivityControls';
-import './ActivityCanvas.css';
 
 export function ActivityCanvas(props) {
   let canvasRef;
   let drawingCanvasRef;
+  let containerRef;
   
   // Canvas state
   const [isDrawing, setIsDrawing] = createSignal(false);
@@ -23,7 +23,7 @@ export function ActivityCanvas(props) {
   // Drawing state
   const drawingThrottle = {
     lastSendTime: 0,
-    throttleMs: 16, // Reduced from 50ms to 16ms (~60fps) for smoother real-time updates
+    throttleMs: 16,
     pendingPoints: [],
     timeoutId: null
   };
@@ -36,7 +36,6 @@ export function ActivityCanvas(props) {
       const p1 = path.points[i - 1];
       const p2 = path.points[i];
       
-      // Calculate distance from point to line segment
       const A = x - p1.x;
       const B = y - p1.y;
       const C = p2.x - p1.x;
@@ -76,35 +75,42 @@ export function ActivityCanvas(props) {
   }
   
   onMount(() => {
-    // Setup canvas immediately
-    setupCanvas();
+    // Setup canvas with proper timing
+    requestAnimationFrame(() => {
+      setupCanvas();
+    });
     
-    // If we already have the activity, we're ready
     if (props.activity) {
       console.log('[ActivityCanvas] Mounted with activity:', props.activity.id);
       setCanvasReady(true);
     }
     
-    // Add window resize handler
+    // Handle window resize
     const handleResize = () => {
       setupCanvas();
     };
     
     window.addEventListener('resize', handleResize);
     
+    // Create resize observer
+    const resizeObserver = new ResizeObserver(() => {
+      setupCanvas();
+    });
+    
+    if (containerRef) {
+      resizeObserver.observe(containerRef);
+    }
+    
     onCleanup(() => {
       window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
     });
   });
   
   function setupCanvas() {
-    if (!canvasRef || !drawingCanvasRef) return;
+    if (!canvasRef || !drawingCanvasRef || !containerRef) return;
     
-    const parent = canvasRef.parentElement;
-    if (!parent) return;
-    
-    // Force layout calculation
-    const rect = parent.getBoundingClientRect();
+    const rect = containerRef.getBoundingClientRect();
     const width = Math.floor(rect.width);
     const height = Math.floor(rect.height);
     
@@ -212,14 +218,8 @@ export function ActivityCanvas(props) {
   
   // Ensure canvas is setup when refs are ready
   createEffect(() => {
-    if (canvasRef && drawingCanvasRef) {
-      // Immediate setup
+    if (canvasRef && drawingCanvasRef && containerRef) {
       setupCanvas();
-      
-      // Delayed setup to catch any layout changes
-      setTimeout(() => {
-        setupCanvas();
-      }, 100);
     }
   });
 
@@ -623,103 +623,28 @@ export function ActivityCanvas(props) {
     renderCanvas();
   });
   
-  // Force canvas resize on any significant state change
-  createEffect(() => {
-    // Track dependencies that might affect layout
-    showParticipants();
-    canvasReady();
-    
-    // Resize canvas after state changes
-    requestAnimationFrame(() => {
-      setupCanvas();
-    });
-  });
-  
   return (
-    <div class="activity-canvas-container">
-      <div class="activity-canvas-wrapper">
-        <div class="activity-canvas-content">
-          <div class="activity-canvas-main">
-            <canvas
-              ref={drawingCanvasRef}
-              style={{ display: 'none' }}
-              class="activity-canvas"
-            />
-            <canvas
-              ref={canvasRef}
-              class="activity-canvas"
-              style={{
-                cursor: selectMode() ? 'pointer' : (canContribute() ? 'crosshair' : 'not-allowed')
-              }}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
-            />
+    <div class="fixed inset-0 bg-gray-900/95 backdrop-blur-sm z-50 flex flex-col animate-fade-in">
+      {/* Header Bar */}
+      <div class="flex items-center justify-between p-4 md:p-6 bg-gray-800/50 backdrop-blur border-b border-gray-700">
+        <div class="flex items-center space-x-4">
+          <div class="animate-slide-down">
+            <h2 class="text-lg md:text-xl font-semibold text-white">{props.activity.title}</h2>
+            <p class="text-sm text-gray-300 flex items-center gap-2">
+              <span>📍</span>
+              <span>{props.activity.street}</span>
+            </p>
           </div>
-        
-          {/* Activity Info */}
-          <div style={{
-          position: 'absolute',
-          top: '20px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          background: 'rgba(0, 0, 0, 0.8)',
-          color: 'white',
-          padding: window.innerWidth < 640 ? '10px 20px' : '15px 30px',
-          'border-radius': '30px',
-          'backdrop-filter': 'blur(10px)',
-          'max-width': '90%',
-          'text-align': 'center'
-        }}>
-          <h2 style={{ margin: 0, 'font-size': window.innerWidth < 640 ? '16px' : '20px' }}>{props.activity.title}</h2>
-          <p style={{ margin: '5px 0 0 0', opacity: 0.7, 'font-size': window.innerWidth < 640 ? '12px' : '14px' }}>
-            📍 {props.activity.street}
-          </p>
         </div>
         
-          {/* Top Right Controls */}
-          <div style={{
-          position: 'absolute',
-          top: '20px',
-          right: '20px',
-          display: 'flex',
-          gap: '10px',
-          'flex-direction': 'row',
-          'align-items': 'center'
-        }}>
-          {/* Participants Toggle Button */}
+        <div class="flex items-center gap-3">
+          {/* Participants Button */}
           <button
             onClick={() => setShowParticipants(!showParticipants())}
-            style={{
-              width: '40px',
-              height: '40px',
-              background: showParticipants() ? 'rgba(59, 130, 246, 0.8)' : 'rgba(255, 255, 255, 0.1)',
-              color: 'white',
-              border: 'none',
-              'border-radius': '50%',
-              'font-size': '18px',
-              cursor: 'pointer',
-              display: 'flex',
-              'align-items': 'center',
-              'justify-content': 'center',
-              transition: 'all 0.2s',
-              position: 'relative'
-            }}
-            title="Show participants"
+            class="relative p-2.5 rounded-full bg-gray-700/50 hover:bg-gray-700 transition-colors duration-200 animate-scale-in"
           >
-            👥
-            <span style={{
-              position: 'absolute',
-              top: '-5px',
-              right: '-5px',
-              background: '#ef4444',
-              color: 'white',
-              'font-size': '12px',
-              'border-radius': '10px',
-              padding: '2px 6px',
-              'font-weight': 'bold'
-            }}>
+            <span class="text-xl">👥</span>
+            <span class="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold">
               {participants().size + 1}
             </span>
           </button>
@@ -727,169 +652,133 @@ export function ActivityCanvas(props) {
           {/* Close Button */}
           <button
             onClick={props.onClose}
-            style={{
-              width: '40px',
-              height: '40px',
-              background: 'rgba(255, 255, 255, 0.1)',
-              color: 'white',
-              border: 'none',
-              'border-radius': '50%',
-              'font-size': '20px',
-              cursor: 'pointer',
-              display: 'flex',
-              'align-items': 'center',
-              'justify-content': 'center',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.background = 'rgba(255, 255, 255, 0.2)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = 'rgba(255, 255, 255, 0.1)';
-            }}
+            class="p-2.5 rounded-full bg-gray-700/50 hover:bg-red-500/20 hover:text-red-400 transition-all duration-200 text-gray-300 animate-scale-in"
           >
-            ✕
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
           </button>
         </div>
-        
-          {/* Drawing Author Overlay */}
-          <Show when={selectMode() && hoveredPath() && props.wsManager?.userHash === props.activity?.ownerId}>
-          <div style={{
-            position: 'absolute',
-            bottom: '20px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: 'rgba(0, 0, 0, 0.9)',
-            color: 'white',
-            padding: '15px 25px',
-            'border-radius': '25px',
-            'font-size': '14px',
-            'backdrop-filter': 'blur(10px)',
-            display: 'flex',
-            'align-items': 'center',
-            gap: '15px',
-            'box-shadow': '0 4px 20px rgba(0, 0, 0, 0.5)'
-          }}>
-            <span>✏️ Contribution by:</span>
-            <span style={{ 'font-weight': 'bold', color: '#60a5fa' }}>
-              {hoveredPath().clientId ? `User ${hoveredPath().clientId.slice(-4)}` : 'Unknown'}
-            </span>
-            {selectedPaths().has(hoveredPath().pathId) ? (
-              <span style={{ 
-                color: '#ef4444',
-                'font-weight': 'bold',
-                padding: '2px 8px',
-                background: 'rgba(239, 68, 68, 0.2)',
-                'border-radius': '12px'
-              }}>
-                ✓ Selected for removal
-              </span>
-            ) : (
-              <span style={{ 
-                color: '#6b7280',
-                'font-size': '12px'
-              }}>
-                Click to select
-              </span>
-            )}
-          </div>
-        </Show>
-        
+      </div>
+      
+      {/* Main Content */}
+      <div class="flex-1 flex p-4 md:p-6 gap-4 min-h-0">
+        {/* Canvas Container */}
+        <div ref={containerRef} class="flex-1 bg-white rounded-lg shadow-2xl overflow-hidden relative animate-scale-in">
+          <canvas
+            ref={drawingCanvasRef}
+            class="absolute inset-0 pointer-events-none"
+            style={{ display: 'none' }}
+          />
+          <canvas
+            ref={canvasRef}
+            class="absolute inset-0 w-full h-full"
+            style={{
+              cursor: selectMode() ? 'pointer' : (canContribute() ? 'crosshair' : 'not-allowed')
+            }}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+          />
+          
+          {/* Canvas Overlays */}
           {/* Contribution Request UI */}
           <Show when={!canContribute() && props.wsManager?.userHash !== props.activity?.ownerId}>
-          <div style={{
-            position: 'absolute',
-            bottom: '80px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: 'rgba(0, 0, 0, 0.8)',
-            color: 'white',
-            padding: '15px 30px',
-            'border-radius': '30px',
-            'backdrop-filter': 'blur(10px)',
-            'text-align': 'center'
-          }}>
-            <div style={{ 'margin-bottom': '10px' }}>
-              🔒 This canvas is view-only
-            </div>
-            {requestSent() ? (
-              <div style={{
-                padding: '8px 20px',
-                background: '#22c55e',
-                color: 'white',
-                'border-radius': '20px',
-                'font-size': '14px'
-              }}>
-                ✓ Request Sent - Waiting for approval
+            <div class="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-800/90 backdrop-blur rounded-full px-6 py-3 animate-slide-up">
+              <div class="text-white text-center">
+                <div class="mb-3 flex items-center gap-2">
+                  <span>🔒</span>
+                  <span>This canvas is view-only</span>
+                </div>
+                {requestSent() ? (
+                  <div class="bg-green-500/20 text-green-300 px-4 py-2 rounded-full text-sm font-medium">
+                    ✓ Request Sent - Waiting for approval
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      if (props.wsManager) {
+                        console.log('[ActivityCanvas] Sending contribution request');
+                        props.wsManager.send({
+                          type: 'requestContribution',
+                          activityId: props.activity.id
+                        });
+                        setRequestSent(true);
+                      }
+                    }}
+                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200"
+                  >
+                    Request to Contribute
+                  </button>
+                )}
               </div>
-            ) : (
-              <button
-                onClick={() => {
-                  if (props.wsManager) {
-                    console.log('[ActivityCanvas] Sending contribution request');
-                    props.wsManager.send({
-                      type: 'requestContribution',
-                      activityId: props.activity.id
-                    });
-                    setRequestSent(true);
-                  }
-                }}
-                style={{
-                  padding: '8px 20px',
-                  background: '#3b82f6',
-                  color: 'white',
-                  border: 'none',
-                  'border-radius': '20px',
-                  'font-size': '14px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.background = '#2563eb';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.background = '#3b82f6';
-                }}
-              >
-                Request to Contribute
-              </button>
-            )}
-          </div>
-        </Show>
+            </div>
+          </Show>
+          
+          {/* Drawing Author Overlay */}
+          <Show when={selectMode() && hoveredPath() && props.wsManager?.userHash === props.activity?.ownerId}>
+            <div class="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-800/90 backdrop-blur rounded-lg px-6 py-3 animate-slide-up">
+              <div class="flex items-center gap-4 text-white">
+                <span>✏️ Contribution by:</span>
+                <span class="font-semibold text-blue-300">
+                  {hoveredPath().clientId ? `User ${hoveredPath().clientId.slice(-4)}` : 'Unknown'}
+                </span>
+                {selectedPaths().has(hoveredPath().pathId) ? (
+                  <span class="bg-red-500/20 text-red-300 px-3 py-1 rounded-full text-sm font-medium">
+                    ✓ Selected for removal
+                  </span>
+                ) : (
+                  <span class="text-gray-400 text-sm">
+                    Click to select
+                  </span>
+                )}
+              </div>
+            </div>
+          </Show>
+          
+          {/* Owner Controls */}
+          <ActivityControls
+            activity={props.activity}
+            wsManager={props.wsManager}
+            selectMode={selectMode()}
+            selectedPaths={selectedPaths()}
+            onToggleSelectMode={() => {
+              setSelectMode(!selectMode());
+              setSelectedPaths(new Set());
+              renderCanvas();
+            }}
+            onRemoveSelected={() => {
+              const pathsToRemove = Array.from(selectedPaths());
+              pathsToRemove.forEach(pathId => {
+                if (props.wsManager) {
+                  props.wsManager.send({
+                    type: 'removeUserDrawing',
+                    activityId: props.activity.id,
+                    pathId
+                  });
+                }
+              });
+              setSelectedPaths(new Set());
+              setSelectMode(false);
+            }}
+          />
+        </div>
         
-          {/* Owner Contribution Requests Panel */}
-          <Show when={props.wsManager?.userHash === props.activity?.ownerId && contributionRequests().length > 0}>
-          <div style={{
-            position: 'absolute',
-            top: window.innerWidth < 640 ? '70px' : '80px',
-            left: window.innerWidth < 640 ? '10px' : '20px',
-            right: window.innerWidth < 640 ? '10px' : 'auto',
-            background: 'rgba(0, 0, 0, 0.9)',
-            color: 'white',
-            padding: window.innerWidth < 640 ? '10px' : '15px',
-            'border-radius': '15px',
-            'backdrop-filter': 'blur(10px)',
-            'min-width': window.innerWidth < 640 ? 'auto' : '250px',
-            'max-width': window.innerWidth < 640 ? '100%' : '350px'
-          }}>
-            <h4 style={{ margin: '0 0 10px 0', 'font-size': '16px' }}>
-              📋 Contribution Requests ({contributionRequests().length})
+        {/* Contribution Requests Panel (Owners) */}
+        <Show when={props.wsManager?.userHash === props.activity?.ownerId && contributionRequests().length > 0}>
+          <div class="w-80 bg-gray-800/50 backdrop-blur rounded-lg p-4 animate-slide-down">
+            <h4 class="text-white font-semibold mb-4 flex items-center gap-2">
+              <span>📋</span>
+              <span>Contribution Requests ({contributionRequests().length})</span>
             </h4>
-            <div style={{ 'max-height': '200px', 'overflow-y': 'auto' }}>
+            <div class="space-y-2 max-h-60 overflow-y-auto">
               {contributionRequests().map(request => (
-                <div style={{
-                  display: 'flex',
-                  'align-items': 'center',
-                  'justify-content': 'space-between',
-                  padding: '8px',
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  'margin-bottom': '8px',
-                  'border-radius': '8px'
-                }}>
-                  <span style={{ 'font-size': '14px' }}>
+                <div class="bg-gray-700/50 rounded-lg p-3 flex items-center justify-between">
+                  <span class="text-white text-sm">
                     User {request.clientId?.slice(-4) || 'Unknown'}
                   </span>
-                  <div style={{ display: 'flex', gap: '5px' }}>
+                  <div class="flex gap-2">
                     <button
                       onClick={() => {
                         if (props.wsManager) {
@@ -903,36 +792,19 @@ export function ActivityCanvas(props) {
                           );
                         }
                       }}
-                      style={{
-                        padding: '4px 10px',
-                        background: '#22c55e',
-                        color: 'white',
-                        border: 'none',
-                        'border-radius': '4px',
-                        'font-size': '12px',
-                        cursor: 'pointer'
-                      }}
+                      class="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-sm font-medium transition-colors"
                     >
-                      ✓ Approve
+                      Approve
                     </button>
                     <button
                       onClick={() => {
-                        // Remove from requests without approving
                         setContributionRequests(prev =>
                           prev.filter(r => r.userHash !== request.userHash)
                         );
                       }}
-                      style={{
-                        padding: '4px 10px',
-                        background: '#ef4444',
-                        color: 'white',
-                        border: 'none',
-                        'border-radius': '4px',
-                        'font-size': '12px',
-                        cursor: 'pointer'
-                      }}
+                      class="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded text-sm font-medium transition-colors"
                     >
-                      ✕
+                      Decline
                     </button>
                   </div>
                 </div>
@@ -940,87 +812,36 @@ export function ActivityCanvas(props) {
             </div>
           </div>
         </Show>
-        
-          {/* Owner Controls */}
-          <ActivityControls
-          activity={props.activity}
-          wsManager={props.wsManager}
-          selectMode={selectMode()}
-          selectedPaths={selectedPaths()}
-          onToggleSelectMode={() => {
-            setSelectMode(!selectMode());
-            setSelectedPaths(new Set());
-            renderCanvas();
-          }}
-          onRemoveSelected={() => {
-            const pathsToRemove = Array.from(selectedPaths());
-            pathsToRemove.forEach(pathId => {
-              if (props.wsManager) {
-                props.wsManager.send({
-                  type: 'removeUserDrawing',
-                  activityId: props.activity.id,
-                  pathId
-                });
-              }
-            });
-            setSelectedPaths(new Set());
-            setSelectMode(false);
-          }}
-        />
       </div>
       
-      {/* Participants Panel - Collapsible Overlay */}
+      {/* Participants Sidebar */}
       <Show when={showParticipants()}>
-        <div style={{
-          position: 'absolute',
-          top: window.innerWidth < 640 ? '70px' : '80px',
-          right: window.innerWidth < 640 ? '10px' : '20px',
-          background: 'rgba(0, 0, 0, 0.95)',
-          color: 'white',
-          padding: '20px',
-          'border-radius': '15px',
-          'backdrop-filter': 'blur(10px)',
-          'min-width': window.innerWidth < 640 ? '200px' : '250px',
-          'max-width': window.innerWidth < 640 ? 'calc(100vw - 40px)' : '350px',
-          'max-height': '400px',
-          'overflow-y': 'auto',
-          'box-shadow': '0 4px 20px rgba(0, 0, 0, 0.5)',
-          'z-index': 10
-        }}>
-          <h3 style={{ color: 'white', margin: '0 0 15px 0', 'font-size': window.innerWidth < 640 ? '16px' : '18px' }}>Active Participants ({participants().size + 1})</h3>
-          <div style={{ color: 'white' }}>
+        <div class="fixed right-4 top-20 w-80 max-h-96 bg-gray-800/95 backdrop-blur rounded-lg shadow-2xl overflow-hidden animate-slide-down z-10">
+          <div class="p-4 border-b border-gray-700">
+            <h3 class="text-white font-semibold flex items-center gap-2">
+              <span>🎨</span>
+              <span>Active Participants ({participants().size + 1})</span>
+            </h3>
+          </div>
+          <div class="p-4 space-y-2 overflow-y-auto max-h-80">
             {/* Current User */}
-            <div style={{
-              padding: '10px',
-              'border-radius': '8px',
-              background: 'rgba(59, 130, 246, 0.2)',
-              'margin-bottom': '8px',
-              border: '1px solid rgba(59, 130, 246, 0.4)'
-            }}>
-              🎨 You {props.wsManager?.userHash === props.activity?.ownerId && <span style={{ 
-                'font-size': '12px',
-                background: 'rgba(34, 197, 94, 0.3)',
-                padding: '2px 8px',
-                'border-radius': '10px',
-                'margin-left': '8px'
-              }}>Owner</span>}
+            <div class="bg-blue-500/20 border border-blue-500/40 rounded-lg p-3 text-white flex items-center justify-between">
+              <span>You</span>
+              {props.wsManager?.userHash === props.activity?.ownerId && (
+                <span class="bg-green-500/20 text-green-300 px-3 py-1 rounded-full text-xs font-medium">
+                  Owner
+                </span>
+              )}
             </div>
             {/* Other Participants */}
             {Array.from(participants()).map(([id, participant]) => (
-              <div style={{
-                padding: '10px',
-                'border-radius': '8px',
-                background: 'rgba(255, 255, 255, 0.05)',
-                'margin-bottom': '8px'
-              }}>
-                🎨 {participant.username}
+              <div class="bg-gray-700/50 rounded-lg p-3 text-white">
+                {participant.username}
               </div>
             ))}
           </div>
         </div>
       </Show>
-        </div>
-      </div>
     </div>
   );
 }
