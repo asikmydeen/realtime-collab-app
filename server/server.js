@@ -426,6 +426,10 @@ connectionManager.on('connection', async (ws, req) => {
           handleGetAllActivities(clientId, message);
           break;
           
+        case 'deleteAllActivities':
+          handleDeleteAllActivities(clientId, message);
+          break;
+          
         case 'removeUserDrawing':
           handleRemoveUserDrawing(clientId, message);
           break;
@@ -1845,6 +1849,59 @@ async function handleGetAllActivities(clientId, message) {
     client.ws.send(JSON.stringify({
       type: 'error',
       message: 'Failed to get activities'
+    }));
+  }
+}
+
+// Delete all activities (for testing/admin purposes)
+async function handleDeleteAllActivities(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client) return;
+  
+  try {
+    // Get all activities
+    const activities = await activityPersistence.getAllActivities();
+    console.log(`[DeleteAllActivities] Deleting ${activities.length} activities`);
+    
+    let deletedCount = 0;
+    
+    // Delete each activity
+    for (const activity of activities) {
+      const deleted = await activityPersistence.deleteActivity(activity.id, activity.ownerId);
+      if (deleted) {
+        deletedCount++;
+        
+        // Broadcast deletion to all clients
+        clients.forEach((targetClient) => {
+          if (targetClient.ws.readyState === 1) {
+            targetClient.ws.send(JSON.stringify({
+              type: 'activityDeleted',
+              activityId: activity.id
+            }));
+          }
+        });
+        
+        // Kick out any users currently in this activity
+        clients.forEach((targetClient) => {
+          if (targetClient.currentActivity === activity.id) {
+            targetClient.currentActivity = null;
+          }
+        });
+      }
+    }
+    
+    console.log(`[DeleteAllActivities] Successfully deleted ${deletedCount} activities`);
+    
+    client.ws.send(JSON.stringify({
+      type: 'allActivitiesDeleted',
+      count: deletedCount
+    }));
+    
+  } catch (error) {
+    console.error('Failed to delete all activities:', error);
+    client.ws.send(JSON.stringify({
+      type: 'error',
+      message: 'Failed to delete all activities'
     }));
   }
 }

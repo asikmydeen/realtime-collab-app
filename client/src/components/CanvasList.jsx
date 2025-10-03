@@ -42,10 +42,17 @@ export function CanvasList(props) {
         setAllCanvases(prev => prev.filter(a => a.id !== data.activityId));
       });
 
+      const cleanup4 = props.wsManager.on('allActivitiesDeleted', (data) => {
+        console.log('[CanvasList] All activities deleted:', data.count);
+        setAllCanvases([]);
+        alert(`Successfully deleted ${data.count} canvases!`);
+      });
+
       return () => {
         cleanup();
         cleanup2();
         cleanup3();
+        cleanup4();
       };
     }
   });
@@ -172,6 +179,49 @@ export function CanvasList(props) {
             🔄 Refresh
           </button>
           <button
+            onClick={() => {
+              const totalCanvases = allCanvases().length;
+              
+              if (totalCanvases === 0) {
+                alert('No canvases to delete.');
+                return;
+              }
+              
+              if (confirm(`⚠️ DELETE ALL ${totalCanvases} CANVASES IN THE SYSTEM? This will delete EVERYTHING and cannot be undone!`)) {
+                if (confirm(`Are you REALLY sure? This will delete ALL ${totalCanvases} canvases created by ALL users!`)) {
+                  // Send delete all request
+                  props.wsManager.send({
+                    type: 'deleteAllActivities'
+                  });
+                  
+                  alert(`Deleting ALL ${totalCanvases} canvases...`);
+                }
+              }
+            }}
+            style={{
+              padding: '8px 16px',
+              background: '#991b1b',
+              color: 'white',
+              border: 'none',
+              'border-radius': '6px',
+              cursor: 'pointer',
+              'font-weight': '700',
+              transition: 'all 0.2s',
+              'text-transform': 'uppercase',
+              'letter-spacing': '0.5px'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = '#7f1d1d';
+              e.target.style.transform = 'scale(1.05)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = '#991b1b';
+              e.target.style.transform = 'scale(1)';
+            }}
+          >
+            ⚠️ DELETE ALL CANVASES
+          </button>
+          <button
             onClick={() => navigate('/')}
             style={{
               padding: '8px 16px',
@@ -242,12 +292,15 @@ export function CanvasList(props) {
               <th style={{ ...tableStyles.th, cursor: 'default' }}>
                 Coordinates
               </th>
+              <th style={{ ...tableStyles.th, cursor: 'default' }}>
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody>
             {isLoading() ? (
               <tr>
-                <td colSpan="8" style={tableStyles.loading}>
+                <td colSpan="9" style={tableStyles.loading}>
                   <div style={{
                     width: '48px',
                     height: '48px',
@@ -262,7 +315,7 @@ export function CanvasList(props) {
               </tr>
             ) : sortCanvases(allCanvases()).length === 0 ? (
               <tr>
-                <td colSpan="8" style={tableStyles.loading}>
+                <td colSpan="9" style={tableStyles.loading}>
                   No canvases found
                 </td>
               </tr>
@@ -283,7 +336,21 @@ export function CanvasList(props) {
                       {canvas.id}
                     </td>
                     <td style={{ ...tableStyles.td, 'font-weight': '500' }}>
-                      {canvas.title}
+                      <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
+                        {canvas.title}
+                        {props.wsManager?.userHash === canvas.ownerId && (
+                          <span style={{
+                            background: '#fbbf24',
+                            color: 'black',
+                            padding: '2px 6px',
+                            'border-radius': '4px',
+                            'font-size': '11px',
+                            'font-weight': 'bold'
+                          }}>
+                            OWNER
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td style={tableStyles.td}>
                       {canvas.ownerName || 'Anonymous'}
@@ -302,6 +369,39 @@ export function CanvasList(props) {
                     </td>
                     <td style={{ ...tableStyles.td, 'font-family': 'monospace', 'font-size': '12px' }}>
                       {canvas.lat?.toFixed(6)}, {canvas.lng?.toFixed(6)}
+                    </td>
+                    <td style={tableStyles.td}>
+                      {props.wsManager?.userHash === canvas.ownerId && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Delete "${canvas.title}"?`)) {
+                              props.wsManager.send({
+                                type: 'deleteActivity',
+                                activityId: canvas.id
+                              });
+                            }
+                          }}
+                          style={{
+                            padding: '4px 8px',
+                            background: '#ef4444',
+                            color: 'white',
+                            border: 'none',
+                            'border-radius': '4px',
+                            'font-size': '12px',
+                            cursor: 'pointer',
+                            'font-weight': '500'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.background = '#dc2626';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.background = '#ef4444';
+                          }}
+                        >
+                          Delete
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )}
