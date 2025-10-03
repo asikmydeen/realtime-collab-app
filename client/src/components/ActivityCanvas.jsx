@@ -623,28 +623,123 @@ export function ActivityCanvas(props) {
     renderCanvas();
   });
   
+  const modernStyles = {
+    container: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(17, 24, 39, 0.95)',
+      'backdrop-filter': 'blur(4px)',
+      'z-index': 50,
+      display: 'flex',
+      'flex-direction': 'column',
+      animation: 'fadeIn 0.3s ease-in-out'
+    },
+    header: {
+      display: 'flex',
+      'align-items': 'center',
+      'justify-content': 'space-between',
+      padding: '16px 24px',
+      background: 'rgba(31, 41, 55, 0.5)',
+      'backdrop-filter': 'blur(10px)',
+      'border-bottom': '1px solid rgba(75, 85, 99, 1)'
+    },
+    mainContent: {
+      flex: 1,
+      display: 'flex',
+      padding: '16px 24px',
+      gap: '16px',
+      'min-height': 0
+    },
+    canvasContainer: {
+      flex: 1,
+      background: 'white',
+      'border-radius': '12px',
+      'box-shadow': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+      overflow: 'hidden',
+      position: 'relative'
+    },
+    participantsButton: {
+      position: 'relative',
+      padding: '10px',
+      'border-radius': '50%',
+      background: 'rgba(55, 65, 81, 0.5)',
+      color: 'white',
+      border: 'none',
+      cursor: 'pointer',
+      transition: 'all 0.2s',
+      'font-size': '20px'
+    },
+    closeButton: {
+      padding: '10px',
+      'border-radius': '50%',
+      background: 'rgba(55, 65, 81, 0.5)',
+      color: 'rgba(209, 213, 219, 1)',
+      border: 'none',
+      cursor: 'pointer',
+      transition: 'all 0.2s'
+    },
+    badge: {
+      position: 'absolute',
+      top: '-4px',
+      right: '-4px',
+      background: '#3B82F6',
+      color: 'white',
+      'font-size': '12px',
+      'border-radius': '50%',
+      width: '20px',
+      height: '20px',
+      display: 'flex',
+      'align-items': 'center',
+      'justify-content': 'center',
+      'font-weight': 'bold'
+    }
+  };
+  
   return (
-    <div class="fixed inset-0 bg-gray-900/95 backdrop-blur-sm z-50 flex flex-col animate-fade-in">
+    <div style={modernStyles.container}>
       {/* Header Bar */}
-      <div class="flex items-center justify-between p-4 md:p-6 bg-gray-800/50 backdrop-blur border-b border-gray-700">
-        <div class="flex items-center space-x-4">
-          <div class="animate-slide-down">
-            <h2 class="text-lg md:text-xl font-semibold text-white">{props.activity.title}</h2>
-            <p class="text-sm text-gray-300 flex items-center gap-2">
+      <div style={modernStyles.header}>
+        <div style={{ display: 'flex', 'align-items': 'center', gap: '16px' }}>
+          <div>
+            <h2 style={{ 
+              margin: 0, 
+              'font-size': '20px', 
+              'font-weight': '600',
+              color: 'white' 
+            }}>
+              {props.activity.title}
+            </h2>
+            <p style={{ 
+              margin: '4px 0 0 0', 
+              'font-size': '14px',
+              color: 'rgba(156, 163, 175, 1)',
+              display: 'flex',
+              'align-items': 'center',
+              gap: '8px'
+            }}>
               <span>📍</span>
               <span>{props.activity.street}</span>
             </p>
           </div>
         </div>
         
-        <div class="flex items-center gap-3">
+        <div style={{ display: 'flex', 'align-items': 'center', gap: '12px' }}>
           {/* Participants Button */}
           <button
             onClick={() => setShowParticipants(!showParticipants())}
-            class="relative p-2.5 rounded-full bg-gray-700/50 hover:bg-gray-700 transition-colors duration-200 animate-scale-in"
+            style={{
+              ...modernStyles.participantsButton,
+              background: showParticipants() ? 'rgba(59, 130, 246, 0.8)' : 'rgba(55, 65, 81, 0.5)'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = showParticipants() ? 'rgba(59, 130, 246, 1)' : 'rgba(55, 65, 81, 0.7)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = showParticipants() ? 'rgba(59, 130, 246, 0.8)' : 'rgba(55, 65, 81, 0.5)';
+            }}
           >
-            <span class="text-xl">👥</span>
-            <span class="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold">
+            👥
+            <span style={modernStyles.badge}>
               {participants().size + 1}
             </span>
           </button>
@@ -652,9 +747,17 @@ export function ActivityCanvas(props) {
           {/* Close Button */}
           <button
             onClick={props.onClose}
-            class="p-2.5 rounded-full bg-gray-700/50 hover:bg-red-500/20 hover:text-red-400 transition-all duration-200 text-gray-300 animate-scale-in"
+            style={modernStyles.closeButton}
+            onMouseEnter={(e) => {
+              e.target.style.background = 'rgba(239, 68, 68, 0.2)';
+              e.target.style.color = 'rgba(248, 113, 113, 1)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = 'rgba(55, 65, 81, 0.5)';
+              e.target.style.color = 'rgba(209, 213, 219, 1)';
+            }}
           >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg style={{ width: '20px', height: '20px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
             </svg>
           </button>
@@ -662,18 +765,26 @@ export function ActivityCanvas(props) {
       </div>
       
       {/* Main Content */}
-      <div class="flex-1 flex p-4 md:p-6 gap-4 min-h-0">
+      <div style={modernStyles.mainContent}>
         {/* Canvas Container */}
-        <div ref={containerRef} class="flex-1 bg-white rounded-lg shadow-2xl overflow-hidden relative animate-scale-in">
+        <div ref={containerRef} style={modernStyles.canvasContainer}>
           <canvas
             ref={drawingCanvasRef}
-            class="absolute inset-0 pointer-events-none"
-            style={{ display: 'none' }}
+            style={{ 
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              display: 'none'
+            }}
           />
           <canvas
             ref={canvasRef}
-            class="absolute inset-0 w-full h-full"
             style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
               cursor: selectMode() ? 'pointer' : (canContribute() ? 'crosshair' : 'not-allowed')
             }}
             onMouseDown={handleMouseDown}
@@ -685,14 +796,36 @@ export function ActivityCanvas(props) {
           {/* Canvas Overlays */}
           {/* Contribution Request UI */}
           <Show when={!canContribute() && props.wsManager?.userHash !== props.activity?.ownerId}>
-            <div class="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-800/90 backdrop-blur rounded-full px-6 py-3 animate-slide-up">
-              <div class="text-white text-center">
-                <div class="mb-3 flex items-center gap-2">
+            <div style={{
+              position: 'absolute',
+              bottom: '24px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: 'rgba(31, 41, 55, 0.9)',
+              'backdrop-filter': 'blur(10px)',
+              'border-radius': '9999px',
+              padding: '12px 24px',
+              animation: 'slideUp 0.3s ease-out'
+            }}>
+              <div style={{ color: 'white', 'text-align': 'center' }}>
+                <div style={{ 
+                  'margin-bottom': '12px',
+                  display: 'flex',
+                  'align-items': 'center',
+                  gap: '8px'
+                }}>
                   <span>🔒</span>
                   <span>This canvas is view-only</span>
                 </div>
                 {requestSent() ? (
-                  <div class="bg-green-500/20 text-green-300 px-4 py-2 rounded-full text-sm font-medium">
+                  <div style={{
+                    background: 'rgba(34, 197, 94, 0.2)',
+                    color: 'rgba(134, 239, 172, 1)',
+                    padding: '8px 16px',
+                    'border-radius': '9999px',
+                    'font-size': '14px',
+                    'font-weight': '500'
+                  }}>
                     ✓ Request Sent - Waiting for approval
                   </div>
                 ) : (
@@ -707,7 +840,23 @@ export function ActivityCanvas(props) {
                         setRequestSent(true);
                       }
                     }}
-                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200"
+                    style={{
+                      background: '#3B82F6',
+                      color: 'white',
+                      padding: '8px 16px',
+                      'border-radius': '9999px',
+                      'font-size': '14px',
+                      'font-weight': '500',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.background = '#2563EB';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.background = '#3B82F6';
+                    }}
                   >
                     Request to Contribute
                   </button>
@@ -718,18 +867,46 @@ export function ActivityCanvas(props) {
           
           {/* Drawing Author Overlay */}
           <Show when={selectMode() && hoveredPath() && props.wsManager?.userHash === props.activity?.ownerId}>
-            <div class="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-800/90 backdrop-blur rounded-lg px-6 py-3 animate-slide-up">
-              <div class="flex items-center gap-4 text-white">
+            <div style={{
+              position: 'absolute',
+              bottom: '24px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: 'rgba(31, 41, 55, 0.9)',
+              'backdrop-filter': 'blur(10px)',
+              'border-radius': '8px',
+              padding: '12px 24px',
+              animation: 'slideUp 0.3s ease-out'
+            }}>
+              <div style={{ 
+                display: 'flex',
+                'align-items': 'center',
+                gap: '16px',
+                color: 'white'
+              }}>
                 <span>✏️ Contribution by:</span>
-                <span class="font-semibold text-blue-300">
+                <span style={{ 
+                  'font-weight': '600',
+                  color: 'rgba(147, 197, 253, 1)'
+                }}>
                   {hoveredPath().clientId ? `User ${hoveredPath().clientId.slice(-4)}` : 'Unknown'}
                 </span>
                 {selectedPaths().has(hoveredPath().pathId) ? (
-                  <span class="bg-red-500/20 text-red-300 px-3 py-1 rounded-full text-sm font-medium">
+                  <span style={{
+                    background: 'rgba(239, 68, 68, 0.2)',
+                    color: 'rgba(248, 113, 113, 1)',
+                    padding: '4px 12px',
+                    'border-radius': '9999px',
+                    'font-size': '14px',
+                    'font-weight': '500'
+                  }}>
                     ✓ Selected for removal
                   </span>
                 ) : (
-                  <span class="text-gray-400 text-sm">
+                  <span style={{ 
+                    color: 'rgba(156, 163, 175, 1)',
+                    'font-size': '14px'
+                  }}>
                     Click to select
                   </span>
                 )}
@@ -767,18 +944,45 @@ export function ActivityCanvas(props) {
         
         {/* Contribution Requests Panel (Owners) */}
         <Show when={props.wsManager?.userHash === props.activity?.ownerId && contributionRequests().length > 0}>
-          <div class="w-80 bg-gray-800/50 backdrop-blur rounded-lg p-4 animate-slide-down">
-            <h4 class="text-white font-semibold mb-4 flex items-center gap-2">
+          <div style={{
+            width: '320px',
+            background: 'rgba(31, 41, 55, 0.5)',
+            'backdrop-filter': 'blur(10px)',
+            'border-radius': '12px',
+            padding: '16px',
+            animation: 'slideDown 0.3s ease-out'
+          }}>
+            <h4 style={{ 
+              color: 'white',
+              'font-weight': '600',
+              margin: '0 0 16px 0',
+              display: 'flex',
+              'align-items': 'center',
+              gap: '8px'
+            }}>
               <span>📋</span>
               <span>Contribution Requests ({contributionRequests().length})</span>
             </h4>
-            <div class="space-y-2 max-h-60 overflow-y-auto">
+            <div style={{ 
+              display: 'flex',
+              'flex-direction': 'column',
+              gap: '8px',
+              'max-height': '240px',
+              'overflow-y': 'auto'
+            }}>
               {contributionRequests().map(request => (
-                <div class="bg-gray-700/50 rounded-lg p-3 flex items-center justify-between">
-                  <span class="text-white text-sm">
+                <div style={{
+                  background: 'rgba(55, 65, 81, 0.5)',
+                  'border-radius': '8px',
+                  padding: '12px',
+                  display: 'flex',
+                  'align-items': 'center',
+                  'justify-content': 'space-between'
+                }}>
+                  <span style={{ color: 'white', 'font-size': '14px' }}>
                     User {request.clientId?.slice(-4) || 'Unknown'}
                   </span>
-                  <div class="flex gap-2">
+                  <div style={{ display: 'flex', gap: '8px' }}>
                     <button
                       onClick={() => {
                         if (props.wsManager) {
@@ -792,7 +996,23 @@ export function ActivityCanvas(props) {
                           );
                         }
                       }}
-                      class="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-sm font-medium transition-colors"
+                      style={{
+                        padding: '4px 12px',
+                        background: '#10B981',
+                        color: 'white',
+                        'border-radius': '4px',
+                        'font-size': '14px',
+                        'font-weight': '500',
+                        border: 'none',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.background = '#059669';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.background = '#10B981';
+                      }}
                     >
                       Approve
                     </button>
@@ -802,7 +1022,23 @@ export function ActivityCanvas(props) {
                           prev.filter(r => r.userHash !== request.userHash)
                         );
                       }}
-                      class="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded text-sm font-medium transition-colors"
+                      style={{
+                        padding: '4px 12px',
+                        background: '#EF4444',
+                        color: 'white',
+                        'border-radius': '4px',
+                        'font-size': '14px',
+                        'font-weight': '500',
+                        border: 'none',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.background = '#DC2626';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.background = '#EF4444';
+                      }}
                     >
                       Decline
                     </button>
@@ -816,32 +1052,99 @@ export function ActivityCanvas(props) {
       
       {/* Participants Sidebar */}
       <Show when={showParticipants()}>
-        <div class="fixed right-4 top-20 w-80 max-h-96 bg-gray-800/95 backdrop-blur rounded-lg shadow-2xl overflow-hidden animate-slide-down z-10">
-          <div class="p-4 border-b border-gray-700">
-            <h3 class="text-white font-semibold flex items-center gap-2">
+        <div style={{
+          position: 'fixed',
+          right: '16px',
+          top: '80px',
+          width: '320px',
+          'max-height': '384px',
+          background: 'rgba(31, 41, 55, 0.95)',
+          'backdrop-filter': 'blur(10px)',
+          'border-radius': '12px',
+          'box-shadow': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          overflow: 'hidden',
+          animation: 'slideDown 0.3s ease-out',
+          'z-index': 10
+        }}>
+          <div style={{
+            padding: '16px',
+            'border-bottom': '1px solid rgba(75, 85, 99, 1)'
+          }}>
+            <h3 style={{ 
+              color: 'white',
+              'font-weight': '600',
+              margin: 0,
+              display: 'flex',
+              'align-items': 'center',
+              gap: '8px'
+            }}>
               <span>🎨</span>
               <span>Active Participants ({participants().size + 1})</span>
             </h3>
           </div>
-          <div class="p-4 space-y-2 overflow-y-auto max-h-80">
+          <div style={{
+            padding: '16px',
+            display: 'flex',
+            'flex-direction': 'column',
+            gap: '8px',
+            'overflow-y': 'auto',
+            'max-height': '320px'
+          }}>
             {/* Current User */}
-            <div class="bg-blue-500/20 border border-blue-500/40 rounded-lg p-3 text-white flex items-center justify-between">
+            <div style={{
+              background: 'rgba(59, 130, 246, 0.2)',
+              border: '1px solid rgba(59, 130, 246, 0.4)',
+              'border-radius': '8px',
+              padding: '12px',
+              color: 'white',
+              display: 'flex',
+              'align-items': 'center',
+              'justify-content': 'space-between'
+            }}>
               <span>You</span>
               {props.wsManager?.userHash === props.activity?.ownerId && (
-                <span class="bg-green-500/20 text-green-300 px-3 py-1 rounded-full text-xs font-medium">
+                <span style={{
+                  background: 'rgba(34, 197, 94, 0.2)',
+                  color: 'rgba(134, 239, 172, 1)',
+                  padding: '2px 12px',
+                  'border-radius': '9999px',
+                  'font-size': '12px',
+                  'font-weight': '500'
+                }}>
                   Owner
                 </span>
               )}
             </div>
             {/* Other Participants */}
             {Array.from(participants()).map(([id, participant]) => (
-              <div class="bg-gray-700/50 rounded-lg p-3 text-white">
+              <div style={{
+                background: 'rgba(55, 65, 81, 0.5)',
+                'border-radius': '8px',
+                padding: '12px',
+                color: 'white'
+              }}>
                 {participant.username}
               </div>
             ))}
           </div>
         </div>
       </Show>
+      
+      {/* Add CSS animations */}
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes slideUp {
+          from { transform: translateY(20px) translateX(-50%); opacity: 0; }
+          to { transform: translateY(0) translateX(-50%); opacity: 1; }
+        }
+        @keyframes slideDown {
+          from { transform: translateY(-20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+      `}</style>
     </div>
   );
 }
