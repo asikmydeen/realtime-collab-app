@@ -17,6 +17,7 @@ export function ActivityCanvas(props) {
   const [canContribute, setCanContribute] = createSignal(false);
   const [requestSent, setRequestSent] = createSignal(false);
   const [contributionRequests, setContributionRequests] = createSignal([]);
+  const [showParticipants, setShowParticipants] = createSignal(false);
   
   // Drawing state
   const drawingThrottle = {
@@ -581,12 +582,11 @@ export function ActivityCanvas(props) {
       position: 'fixed',
       inset: 0,
       background: 'rgba(0, 0, 0, 0.9)',
-      display: 'flex',
       'z-index': 1500
     }}>
       {/* Canvas Area */}
       <div style={{
-        flex: 1,
+        width: '100%',
         position: 'relative',
         display: 'flex',
         'align-items': 'center',
@@ -629,45 +629,91 @@ export function ActivityCanvas(props) {
           transform: 'translateX(-50%)',
           background: 'rgba(0, 0, 0, 0.8)',
           color: 'white',
-          padding: '15px 30px',
+          padding: window.innerWidth < 640 ? '10px 20px' : '15px 30px',
           'border-radius': '30px',
-          'backdrop-filter': 'blur(10px)'
+          'backdrop-filter': 'blur(10px)',
+          'max-width': '90%',
+          'text-align': 'center'
         }}>
-          <h2 style={{ margin: 0, 'font-size': '20px' }}>{props.activity.title}</h2>
-          <p style={{ margin: '5px 0 0 0', opacity: 0.7, 'font-size': '14px' }}>
-            📍 {props.activity.street} • 👥 {participants().size + 1} participants
+          <h2 style={{ margin: 0, 'font-size': window.innerWidth < 640 ? '16px' : '20px' }}>{props.activity.title}</h2>
+          <p style={{ margin: '5px 0 0 0', opacity: 0.7, 'font-size': window.innerWidth < 640 ? '12px' : '14px' }}>
+            📍 {props.activity.street}
           </p>
         </div>
         
-        {/* Close Button */}
-        <button
-          onClick={props.onClose}
-          style={{
-            position: 'absolute',
-            top: '20px',
-            right: '20px',
-            width: '40px',
-            height: '40px',
-            background: 'rgba(255, 255, 255, 0.1)',
-            color: 'white',
-            border: 'none',
-            'border-radius': '50%',
-            'font-size': '20px',
-            cursor: 'pointer',
-            display: 'flex',
-            'align-items': 'center',
-            'justify-content': 'center',
-            transition: 'all 0.2s'
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.background = 'rgba(255, 255, 255, 0.2)';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.background = 'rgba(255, 255, 255, 0.1)';
-          }}
-        >
-          ✕
-        </button>
+        {/* Top Right Controls */}
+        <div style={{
+          position: 'absolute',
+          top: '20px',
+          right: '20px',
+          display: 'flex',
+          gap: '10px',
+          'flex-direction': 'row',
+          'align-items': 'center'
+        }}>
+          {/* Participants Toggle Button */}
+          <button
+            onClick={() => setShowParticipants(!showParticipants())}
+            style={{
+              width: '40px',
+              height: '40px',
+              background: showParticipants() ? 'rgba(59, 130, 246, 0.8)' : 'rgba(255, 255, 255, 0.1)',
+              color: 'white',
+              border: 'none',
+              'border-radius': '50%',
+              'font-size': '18px',
+              cursor: 'pointer',
+              display: 'flex',
+              'align-items': 'center',
+              'justify-content': 'center',
+              transition: 'all 0.2s',
+              position: 'relative'
+            }}
+            title="Show participants"
+          >
+            👥
+            <span style={{
+              position: 'absolute',
+              top: '-5px',
+              right: '-5px',
+              background: '#ef4444',
+              color: 'white',
+              'font-size': '12px',
+              'border-radius': '10px',
+              padding: '2px 6px',
+              'font-weight': 'bold'
+            }}>
+              {participants().size + 1}
+            </span>
+          </button>
+          
+          {/* Close Button */}
+          <button
+            onClick={props.onClose}
+            style={{
+              width: '40px',
+              height: '40px',
+              background: 'rgba(255, 255, 255, 0.1)',
+              color: 'white',
+              border: 'none',
+              'border-radius': '50%',
+              'font-size': '20px',
+              cursor: 'pointer',
+              display: 'flex',
+              'align-items': 'center',
+              'justify-content': 'center',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = 'rgba(255, 255, 255, 0.2)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = 'rgba(255, 255, 255, 0.1)';
+            }}
+          >
+            ✕
+          </button>
+        </div>
         
         {/* Drawing Author Overlay */}
         <Show when={selectMode() && hoveredPath() && props.wsManager?.userHash === props.activity?.ownerId}>
@@ -778,15 +824,16 @@ export function ActivityCanvas(props) {
         <Show when={props.wsManager?.userHash === props.activity?.ownerId && contributionRequests().length > 0}>
           <div style={{
             position: 'absolute',
-            top: '80px',
-            left: '20px',
+            top: window.innerWidth < 640 ? '70px' : '80px',
+            left: window.innerWidth < 640 ? '10px' : '20px',
+            right: window.innerWidth < 640 ? '10px' : 'auto',
             background: 'rgba(0, 0, 0, 0.9)',
             color: 'white',
-            padding: '15px',
+            padding: window.innerWidth < 640 ? '10px' : '15px',
             'border-radius': '15px',
             'backdrop-filter': 'blur(10px)',
-            'min-width': '250px',
-            'max-width': '350px'
+            'min-width': window.innerWidth < 640 ? 'auto' : '250px',
+            'max-width': window.innerWidth < 640 ? '100%' : '350px'
           }}>
             <h4 style={{ margin: '0 0 10px 0', 'font-size': '16px' }}>
               📋 Contribution Requests ({contributionRequests().length})
@@ -885,27 +932,56 @@ export function ActivityCanvas(props) {
         />
       </div>
       
-      {/* Participants List */}
-      <div style={{
-        width: '250px',
-        background: 'rgba(0, 0, 0, 0.8)',
-        padding: '20px',
-        'overflow-y': 'auto'
-      }}>
-        <h3 style={{ color: 'white', margin: '0 0 20px 0' }}>Active Participants</h3>
-        <div style={{ color: 'white' }}>
-          {Array.from(participants()).map(([id, participant]) => (
+      {/* Participants Panel - Collapsible Overlay */}
+      <Show when={showParticipants()}>
+        <div style={{
+          position: 'absolute',
+          top: window.innerWidth < 640 ? '70px' : '80px',
+          right: window.innerWidth < 640 ? '10px' : '20px',
+          background: 'rgba(0, 0, 0, 0.95)',
+          color: 'white',
+          padding: '20px',
+          'border-radius': '15px',
+          'backdrop-filter': 'blur(10px)',
+          'min-width': window.innerWidth < 640 ? '200px' : '250px',
+          'max-width': window.innerWidth < 640 ? 'calc(100vw - 40px)' : '350px',
+          'max-height': '400px',
+          'overflow-y': 'auto',
+          'box-shadow': '0 4px 20px rgba(0, 0, 0, 0.5)',
+          'z-index': 10
+        }}>
+          <h3 style={{ color: 'white', margin: '0 0 15px 0', 'font-size': window.innerWidth < 640 ? '16px' : '18px' }}>Active Participants ({participants().size + 1})</h3>
+          <div style={{ color: 'white' }}>
+            {/* Current User */}
             <div style={{
-              padding: '8px',
+              padding: '10px',
               'border-radius': '8px',
-              background: 'rgba(255, 255, 255, 0.05)',
-              'margin-bottom': '8px'
+              background: 'rgba(59, 130, 246, 0.2)',
+              'margin-bottom': '8px',
+              border: '1px solid rgba(59, 130, 246, 0.4)'
             }}>
-              🎨 {participant.username}
+              🎨 You {props.wsManager?.userHash === props.activity?.ownerId && <span style={{ 
+                'font-size': '12px',
+                background: 'rgba(34, 197, 94, 0.3)',
+                padding: '2px 8px',
+                'border-radius': '10px',
+                'margin-left': '8px'
+              }}>Owner</span>}
             </div>
-          ))}
+            {/* Other Participants */}
+            {Array.from(participants()).map(([id, participant]) => (
+              <div style={{
+                padding: '10px',
+                'border-radius': '8px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                'margin-bottom': '8px'
+              }}>
+                🎨 {participant.username}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      </Show>
     </div>
   );
 }
