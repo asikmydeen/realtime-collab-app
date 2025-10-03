@@ -729,7 +729,6 @@ export function ActivityView(props) {
         cleanup1();
         cleanup2();
         cleanup3();
-        cleanup4();
         cleanup5();
         cleanup6();
         if (zoomAnimationFrame) {
