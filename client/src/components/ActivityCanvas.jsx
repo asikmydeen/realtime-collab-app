@@ -593,15 +593,16 @@ export function ActivityCanvas(props) {
         'justify-content': 'center'
       }}>
         <div style={{
-          width: '90%',
-          height: '90%',
-          'max-width': '1200px',
-          'max-height': '800px',
+          width: 'calc(100% - 40px)',
+          height: 'calc(100% - 40px)',
+          'max-width': window.innerWidth < 768 ? '100%' : '95%',
+          'max-height': window.innerWidth < 768 ? '100%' : '95%',
           background: 'white',
-          'border-radius': '15px',
+          'border-radius': window.innerWidth < 768 ? '0' : '15px',
           'box-shadow': '0 10px 50px rgba(0, 0, 0, 0.5)',
           position: 'relative',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          margin: window.innerWidth < 768 ? '0' : '20px'
         }}>
           <canvas
             ref={drawingCanvasRef}
