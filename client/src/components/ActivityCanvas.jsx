@@ -256,14 +256,29 @@ export function ActivityCanvas(props) {
     }
   });
   
-  // Mouse handlers
-  function handleMouseDown(e) {
-    if (e.button === 0) {
-      if (selectMode()) {
-        // In select mode, find the clicked path
-        const rect = canvasRef.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+  // Get coordinates from mouse or touch event
+  function getCoordinates(e) {
+    const rect = canvasRef.getBoundingClientRect();
+    if (e.touches && e.touches.length > 0) {
+      return {
+        x: e.touches[0].clientX - rect.left,
+        y: e.touches[0].clientY - rect.top
+      };
+    }
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+  }
+  
+  // Combined pointer down handler for mouse and touch
+  function handlePointerDown(e) {
+    e.preventDefault();
+    const coords = getCoordinates(e);
+    
+    if (selectMode()) {
+      // In select mode, find the clicked path
+      const { x, y } = coords;
         
         // Only owners can select drawings
         const isOwner = props.wsManager?.userHash === props.activity?.ownerId;
@@ -292,9 +307,7 @@ export function ActivityCanvas(props) {
       } else if (canContribute()) {
         setIsDrawing(true);
         
-        const rect = canvasRef.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const { x, y } = coords;
         
         // Start new path
         const pathId = `${props.wsManager?.clientId}_${Date.now()}`;
@@ -323,18 +336,16 @@ export function ActivityCanvas(props) {
         });
       }
     }
-  }
   
-  function handleMouseMove(e) {
+  function handlePointerMove(e) {
+    e.preventDefault();
+    const coords = getCoordinates(e);
+    const { x, y } = coords;
+    
     if (selectMode() && !isDrawing()) {
       // Only owners can hover/select in review mode
       const isOwner = props.wsManager?.userHash === props.activity?.ownerId;
       if (!isOwner) return;
-      
-      // In select mode, track which path is under the mouse
-      const rect = canvasRef.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
       
       let foundPath = null;
       for (let i = paths().length - 1; i >= 0; i--) {
@@ -353,9 +364,6 @@ export function ActivityCanvas(props) {
         renderCanvas();
       }
     } else if (isDrawing()) {
-      const rect = canvasRef.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
       
       // Add point to current path
       setPaths(prev => {
@@ -381,15 +389,7 @@ export function ActivityCanvas(props) {
     }
   }
   
-  function handleMouseMove(e) {
-    handlePointerMove(e);
-  }
-  
-  function handleTouchMove(e) {
-    handlePointerMove(e);
-  }
-  
-  function handleMouseUp() {
+  function handlePointerUp() {
     if (isDrawing()) {
       // Send end event with path info
       const currentPath = paths()[paths().length - 1];
@@ -401,6 +401,35 @@ export function ActivityCanvas(props) {
       });
     }
     setIsDrawing(false);
+  }
+  
+  // Mouse specific handlers
+  function handleMouseDown(e) {
+    if (e.button === 0) {
+      handlePointerDown(e);
+    }
+  }
+  
+  function handleMouseMove(e) {
+    handlePointerMove(e);
+  }
+  
+  function handleMouseUp() {
+    handlePointerUp();
+  }
+  
+  // Touch handlers
+  function handleTouchStart(e) {
+    handlePointerDown(e);
+  }
+  
+  function handleTouchMove(e) {
+    handlePointerMove(e);
+  }
+  
+  function handleTouchEnd(e) {
+    e.preventDefault();
+    handlePointerUp();
   }
   
   // Send drawing data with throttling
