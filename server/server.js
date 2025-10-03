@@ -418,6 +418,10 @@ connectionManager.on('connection', async (ws, req) => {
           handleUpdateActivityPermissions(clientId, message);
           break;
           
+        case 'deleteActivity':
+          handleDeleteActivity(clientId, message);
+          break;
+          
         case 'removeUserDrawing':
           handleRemoveUserDrawing(clientId, message);
           break;
@@ -1815,6 +1819,60 @@ async function handleApproveContributor(clientId, message) {
     
   } catch (error) {
     console.error('Failed to approve contributor:', error);
+  }
+}
+
+// Handle activity deletion (owner only)
+async function handleDeleteActivity(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client || !message.activityId) return;
+  
+  try {
+    // Attempt to delete the activity
+    const deleted = await activityPersistence.deleteActivity(message.activityId, client.userHash);
+    
+    if (deleted) {
+      console.log(`[DeleteActivity] Activity ${message.activityId} deleted by owner ${client.userHash}`);
+      
+      // Notify the client of successful deletion
+      client.ws.send(JSON.stringify({
+        type: 'activityDeleted',
+        activityId: message.activityId
+      }));
+      
+      // Broadcast deletion to all clients in the area
+      clients.forEach((targetClient) => {
+        if (targetClient.ws.readyState === 1 && targetClient.geoViewport) {
+          targetClient.ws.send(JSON.stringify({
+            type: 'activityDeleted',
+            activityId: message.activityId
+          }));
+        }
+      });
+      
+      // Kick out any users currently in this activity
+      clients.forEach((targetClient) => {
+        if (targetClient.currentActivity === message.activityId) {
+          targetClient.currentActivity = null;
+          targetClient.ws.send(JSON.stringify({
+            type: 'activityDeleted',
+            activityId: message.activityId,
+            kicked: true
+          }));
+        }
+      });
+    } else {
+      client.ws.send(JSON.stringify({
+        type: 'error',
+        message: 'You do not have permission to delete this activity'
+      }));
+    }
+  } catch (error) {
+    console.error('Failed to delete activity:', error);
+    client.ws.send(JSON.stringify({
+      type: 'error',
+      message: 'Failed to delete activity'
+    }));
   }
 }
 

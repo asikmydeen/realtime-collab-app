@@ -691,12 +691,32 @@ export function ActivityView(props) {
         setIsLoadingActivities(false); // Clear loading state
       });
       
+      const cleanup6 = props.wsManager.on('activityDeleted', (data) => {
+        console.log('[ActivityView] Activity deleted:', data.activityId);
+        
+        // Remove from activities list
+        setActivities(prev => prev.filter(a => a.id !== data.activityId));
+        setMyActivities(prev => prev.filter(a => a.id !== data.activityId));
+        
+        // Close if currently viewing this activity
+        if (selectedActivity()?.id === data.activityId) {
+          setSelectedActivity(null);
+          if (data.kicked) {
+            alert('This canvas has been deleted by the owner.');
+          }
+        }
+        
+        // Re-render the map
+        renderMap();
+      });
+      
       onCleanup(() => {
         cleanup1();
         cleanup2();
         cleanup3();
         cleanup4();
         cleanup5();
+        cleanup6();
         if (zoomAnimationFrame) {
           cancelAnimationFrame(zoomAnimationFrame);
         }
@@ -988,6 +1008,7 @@ export function ActivityView(props) {
         </div>
       </Show>
       
+      
       {/* Selected Activity Canvas */}
       <Show when={selectedActivity()}>
         <ActivityCanvas
@@ -1008,14 +1029,6 @@ export function ActivityView(props) {
         />
       </Show>
       
-      {/* Create Activity Modal */}
-      <Show when={showCreateActivity()}>
-        <CreateActivityModal
-          onClose={() => setShowCreateActivity(false)}
-          onCreate={createActivity}
-          currentLocation={userLocation()}
-        />
-      </Show>
       
       {/* Search UI */}
       <Show when={showSearch()}>

@@ -489,4 +489,47 @@ export class ActivityPersistence {
       return true; // Default to allow on error
     }
   }
+  
+  // Delete an activity (owner only)
+  async deleteActivity(activityId, userHash) {
+    if (!this.redis) return false;
+    
+    try {
+      // Get activity to check ownership
+      const activityData = await this.redis.get(`${this.keyPrefix}${activityId}`);
+      if (!activityData) return false;
+      
+      const activity = JSON.parse(activityData);
+      
+      // Only owner can delete
+      if (activity.ownerId !== userHash) {
+        console.log(`[DeleteActivity] User ${userHash} is not owner of activity ${activityId}`);
+        return false;
+      }
+      
+      // Delete activity data
+      await this.redis.del(`${this.keyPrefix}${activityId}`);
+      
+      // Delete canvas data
+      await this.redis.del(`${this.keyPrefix}canvas:${activityId}`);
+      
+      // Remove from geohash indices
+      for (let precision = 4; precision <= this.defaultPrecision; precision++) {
+        const hash = activity.geohash.substring(0, precision);
+        await this.redis.sRem(`${this.keyPrefix}geo:${hash}`, activityId);
+      }
+      
+      // Remove from street index if available
+      if (activity.street) {
+        const streetKey = this.normalizeStreet(activity.street);
+        await this.redis.sRem(`${this.keyPrefix}street:${streetKey}`, activityId);
+      }
+      
+      console.log(`[DeleteActivity] Successfully deleted activity ${activityId}`);
+      return true;
+    } catch (error) {
+      console.error('Failed to delete activity:', error);
+      return false;
+    }
+  }
 }
