@@ -1208,6 +1208,8 @@ async function handleCreateActivity(clientId, message) {
       }
     }
     
+    console.log(`[CreateActivity] Creating activity with owner hash: ${client.userHash}`);
+    
     const activity = await activityPersistence.createActivity({
       title: message.title,
       description: message.description,
@@ -1221,7 +1223,7 @@ async function handleCreateActivity(clientId, message) {
       creatorName: client.username
     });
     
-    console.log(`[Activity] Created: ${activity.id} at ${activity.street} by owner ${client.userHash}`);
+    console.log(`[Activity] Created: ${activity.id} at ${activity.street} by owner ${client.userHash} (client: ${clientId}`);
     
     // Join the creator to their activity
     client.currentActivity = activity.id;

@@ -68,6 +68,11 @@ export class ActivityPersistence {
       const activityId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const geohash = await this.getGeohash(data.lat, data.lng);
       
+      if (!data.ownerId) {
+        console.error('[CreateActivity] ERROR: No ownerId provided!', data);
+        throw new Error('ownerId is required to create an activity');
+      }
+      
       const activity = {
         id: activityId,
         title: data.title || 'Untitled Activity',
@@ -354,6 +359,22 @@ export class ActivityPersistence {
     return await this.isUserNearLocation(userLat, userLng, targetLat, targetLng, 500);
   }
   
+  // Get a single activity by ID
+  async getActivity(activityId) {
+    if (!this.redis || !activityId) return null;
+    
+    try {
+      const data = await this.redis.get(`${this.keyPrefix}${activityId}`);
+      if (data) {
+        return JSON.parse(data);
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to get activity:', error);
+      return null;
+    }
+  }
+  
   // Get activities created by a specific owner
   async getActivitiesByOwner(ownerId) {
     if (!this.redis || !ownerId) {
@@ -374,13 +395,26 @@ export class ActivityPersistence {
           continue;
         }
         
-        const activityData = await this.redis.get(key);
-        if (activityData) {
-          const activity = JSON.parse(activityData);
-          console.log(`[getActivitiesByOwner] Checking activity ${activity.id}, owner: ${activity.ownerId}, looking for: ${ownerId}`);
-          if (activity.ownerId === ownerId) {
-            activities.push(activity);
+        // Check if it's a proper activity key (should be activity:ID format)
+        const activityIdMatch = key.match(/^activity:([^:]+)$/);
+        if (!activityIdMatch) {
+          console.log(`[getActivitiesByOwner] Skipping invalid key format: ${key}`);
+          continue;
+        }
+        
+        try {
+          const activityData = await this.redis.get(key);
+          if (activityData) {
+            const activity = JSON.parse(activityData);
+            console.log(`[getActivitiesByOwner] Checking activity ${activity.id}, owner: ${activity.ownerId}, looking for: ${ownerId}`);
+            if (activity.ownerId === ownerId) {
+              activities.push(activity);
+            }
           }
+        } catch (err) {
+          // Skip keys that aren't strings (could be hashes, sets, etc)
+          console.log(`[getActivitiesByOwner] Skipping non-string key: ${key}`);
+          continue;
         }
       }
       
