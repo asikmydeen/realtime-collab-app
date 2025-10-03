@@ -235,10 +235,30 @@ connectionManager.on('connection', async (ws, req) => {
   
   console.log(`👤 New client connected: ${clientId} from ${clientIp}`);
   
+  // Check for userHash in URL
+  const url = new URL(req.url || '', `http://${req.headers.host}`);
+  const urlUserHash = url.searchParams.get('userHash');
+  
   // Get or create user hash
   const clientInfo = { ip: clientIp, userAgent };
-  const userHash = await userIdentityManager.getOrCreateUserHash(clientInfo);
-  console.log(`[Auth] Generated initial user hash for ${clientId}: ${userHash}`);
+  let userHash;
+  
+  if (urlUserHash) {
+    console.log(`[Auth] Client provided userHash in URL: ${urlUserHash}`);
+    // Verify it exists
+    const exists = await userIdentityManager.userHashExists(urlUserHash);
+    if (exists) {
+      userHash = urlUserHash;
+      console.log(`[Auth] Using authenticated hash: ${userHash}`);
+      await userIdentityManager.getUserIdentity(userHash);
+    } else {
+      console.log(`[Auth] Invalid userHash provided, generating new one`);
+      userHash = await userIdentityManager.getOrCreateUserHash(clientInfo);
+    }
+  } else {
+    userHash = await userIdentityManager.getOrCreateUserHash(clientInfo);
+    console.log(`[Auth] Generated new user hash for ${clientId}: ${userHash}`);
+  }
   
   // Store client
   clients.set(clientId, {
@@ -1270,10 +1290,14 @@ async function handleJoinActivity(clientId, message) {
   // Load canvas data for the activity
   const canvasData = await activityPersistence.loadActivityCanvas(message.activityId);
   
+  // Also load activity data to get permissions/requests
+  const activity = await activityPersistence.getActivity(message.activityId);
+  
   client.ws.send(JSON.stringify({
     type: 'activityJoined',
     activityId: message.activityId,
-    canvasData: canvasData || { paths: [] }
+    canvasData: canvasData || { paths: [] },
+    activity: activity
   }));
   
   // Update participant count

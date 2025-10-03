@@ -792,6 +792,7 @@ export function ActivityView(props) {
                   const newValue = !showMyActivities();
                   setShowMyActivities(newValue);
                   if (newValue && props.wsManager) {
+                    console.log('[ActivityView] Requesting my activities, userHash:', props.wsManager.userHash);
                     // Request user's activities
                     props.wsManager.send({ type: 'getMyActivities' });
                   } else if (!newValue) {

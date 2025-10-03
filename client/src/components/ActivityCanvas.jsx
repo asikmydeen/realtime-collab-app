@@ -462,6 +462,13 @@ export function ActivityCanvas(props) {
           renderCanvas();
         }
         setCanvasReady(true);
+        
+        // If we have activity data with permissions, update contribution requests
+        if (data.activity && props.wsManager?.userHash === data.activity.ownerId) {
+          const requests = data.activity.permissions?.contributorRequests || [];
+          console.log('[ActivityCanvas] Loading contribution requests:', requests.length);
+          setContributionRequests(requests);
+        }
       });
       
       const cleanup2 = props.wsManager.on('remoteActivityDraw', (data) => {

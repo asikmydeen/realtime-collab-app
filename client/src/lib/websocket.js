@@ -12,10 +12,20 @@ export class WebSocketManager {
 
   connect() {
     console.log('Connecting to WebSocket server...');
-    console.log('WebSocket URL:', this.url);
+    
+    // Add stored user hash to connection URL
+    let connectUrl = this.url;
+    const storedHash = localStorage.getItem('userHash');
+    if (storedHash) {
+      const separator = connectUrl.includes('?') ? '&' : '?';
+      connectUrl = `${connectUrl}${separator}userHash=${storedHash}`;
+      console.log('Connecting with stored userHash:', storedHash);
+    }
+    
+    console.log('WebSocket URL:', connectUrl);
     
     try {
-      this.ws = new WebSocket(this.url);
+      this.ws = new WebSocket(connectUrl);
     } catch (error) {
       console.error('Failed to create WebSocket:', error);
       return;
@@ -26,13 +36,6 @@ export class WebSocketManager {
       this.reconnectAttempts = 0;
       this.emit('connected');
       this.startPing();
-      
-      // Send stored user hash if available
-      const storedHash = localStorage.getItem('userHash');
-      if (storedHash) {
-        console.log('Sending stored user hash:', storedHash);
-        this.send({ type: 'authenticate', userHash: storedHash });
-      }
     };
     
     this.ws.onmessage = (event) => {
