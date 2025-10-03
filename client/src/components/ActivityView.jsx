@@ -1,6 +1,6 @@
 import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import { mapService } from '../services/mapService';
-import { ActivityCanvas } from './ActivityCanvas';
+import { FabricCanvas } from './FabricCanvas';
 
 // Generate artistic names for quick canvas creation
 function generateArtisticName() {
@@ -10,17 +10,17 @@ function generateArtisticName() {
     'Dreamy', 'Bold', 'Tranquil', 'Electric', 'Harmonious',
     'Celestial', 'Flowing', 'Prismatic', 'Infinite', 'Golden'
   ];
-  
+
   const nouns = [
     'Canvas', 'Dreamscape', 'Expression', 'Vision', 'Creation',
     'Palette', 'Sanctuary', 'Journey', 'Symphony', 'Horizon',
     'Reflection', 'Spectrum', 'Odyssey', 'Tapestry', 'Realm',
     'Oasis', 'Aurora', 'Mosaic', 'Nebula', 'Garden'
   ];
-  
+
   const adjective = adjectives[Math.floor(Math.random() * adjectives.length)];
   const noun = nouns[Math.floor(Math.random() * nouns.length)];
-  
+
   return `${adjective} ${noun}`;
 }
 
@@ -33,14 +33,14 @@ function isInBounds(lat, lng, bounds) {
 export function ActivityView(props) {
   let mapCanvasRef;
   let tilesCanvasRef;
-  
+
   // Map state
   const [userLocation, setUserLocation] = createSignal(null);
   const [viewport, setViewport] = createSignal({ x: 0, y: 0 });
   const [mapZoom, setMapZoom] = createSignal(18); // Start at street level to see activities
   const [currentBounds, setCurrentBounds] = createSignal(null);
   const [locationName, setLocationName] = createSignal('');
-  
+
   // Activity state
   const [activities, setActivities] = createSignal([]);
   const [streetActivities, setStreetActivities] = createSignal({});
@@ -51,27 +51,27 @@ export function ActivityView(props) {
   const [myActivities, setMyActivities] = createSignal([]);
   const [showMyActivities, setShowMyActivities] = createSignal(false);
   const [isLoadingActivities, setIsLoadingActivities] = createSignal(false);
-  
+
   // Map interaction
   const [isPanning, setIsPanning] = createSignal(false);
   const [panStart, setPanStart] = createSignal({ x: 0, y: 0 });
   const [targetZoom, setTargetZoom] = createSignal(18);
   const [loadedTiles, setLoadedTiles] = createSignal(new Map());
   const [tilesLoading, setTilesLoading] = createSignal(new Set());
-  
+
   // Search
   const [searchQuery, setSearchQuery] = createSignal('');
   const [searchResults, setSearchResults] = createSignal([]);
   const [isSearching, setIsSearching] = createSignal(false);
-  
+
   let zoomAnimationFrame = null;
   let viewportUpdateTimeout = null;
   let activityPollingInterval = null;
-  
+
   onMount(async () => {
     setupCanvas();
     await getUserLocation();
-    
+
     // Keyboard controls
     const handleKeyDown = (e) => {
       if (e.key === '+' || e.key === '=') {
@@ -95,11 +95,11 @@ export function ActivityView(props) {
         }
       }
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
     onCleanup(() => window.removeEventListener('keydown', handleKeyDown));
   });
-  
+
   async function getUserLocation() {
     if ('geolocation' in navigator) {
       try {
@@ -109,19 +109,19 @@ export function ActivityView(props) {
             timeout: 10000
           });
         });
-        
+
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
         setUserLocation({ lat, lng });
-        
+
         // Get location name
         const location = await mapService.getLocationName(lat, lng);
         if (location) {
           setLocationName(location.city || location.country || 'Unknown');
         }
-        
+
         updateViewport(lat, lng, mapZoom());
-        
+
         // Request user's activities to open most recent one
         requestUserActivities();
       } catch (error) {
@@ -132,13 +132,13 @@ export function ActivityView(props) {
         setUserLocation({ lat: defaultLat, lng: defaultLng }); // NYC
         setLocationName('New York');
         updateViewport(defaultLat, defaultLng, mapZoom());
-        
+
         // Request user's activities even with fallback location
         requestUserActivities();
       }
     }
   }
-  
+
   function setupCanvas() {
     const parent = mapCanvasRef.parentElement;
     mapCanvasRef.width = parent.clientWidth;
@@ -147,7 +147,7 @@ export function ActivityView(props) {
     tilesCanvasRef.height = parent.clientHeight;
     renderMap();
   }
-  
+
   function updateViewport(lat, lng, zoom) {
     const bounds = mapService.getViewportBounds(
       lat, lng,
@@ -155,18 +155,18 @@ export function ActivityView(props) {
       mapCanvasRef.height,
       zoom
     );
-    
+
     setCurrentBounds(bounds);
     setMapZoom(zoom);
-    
+
     const worldPixel = mapService.latLngToWorldPixel(lat, lng, zoom);
     setViewport({
       x: worldPixel.x - mapCanvasRef.width / 2,
       y: worldPixel.y - mapCanvasRef.height / 2
     });
-    
+
     loadTilesForCurrentView();
-    
+
     // Request activities immediately when zoomed in to street level
     if (zoom >= 17) {
       if (props.wsManager && bounds) {
@@ -179,19 +179,19 @@ export function ActivityView(props) {
     }
     requestActivities(); // Also queue a delayed request for stability
   }
-  
+
   async function loadTilesForCurrentView() {
     const bounds = currentBounds();
     if (!bounds) return;
-    
+
     const tiles = mapService.getTilesForViewport(bounds, mapZoom());
     const loading = new Set(tilesLoading());
-    
+
     for (const tile of tiles) {
       const key = `${tile.zoom}/${tile.x}/${tile.y}`;
       if (!loadedTiles().has(key) && !loading.has(key)) {
         loading.add(key);
-        
+
         mapService.loadTile(tile.x, tile.y, tile.zoom)
           .then(img => {
             setLoadedTiles(prev => {
@@ -212,19 +212,19 @@ export function ActivityView(props) {
       }
     }
   }
-  
+
   function renderMap() {
     const ctx = mapCanvasRef.getContext('2d');
     const tilesCtx = tilesCanvasRef.getContext('2d');
-    
+
     // Clear canvases
     ctx.clearRect(0, 0, mapCanvasRef.width, mapCanvasRef.height);
     tilesCtx.clearRect(0, 0, tilesCanvasRef.width, tilesCanvasRef.height);
-    
+
     // Render map tiles
     renderMapTiles(tilesCtx);
     ctx.drawImage(tilesCanvasRef, 0, 0);
-    
+
     // Render activity markers/indicators
     const zoom = mapZoom();
     if (zoom >= 17) { // Street level - show individual activities
@@ -233,67 +233,67 @@ export function ActivityView(props) {
       renderStreetIndicators(ctx);
     }
   }
-  
+
   function renderMapTiles(ctx) {
     const vp = viewport();
     const zoom = mapZoom();
     const integerZoom = Math.floor(zoom);
     const fractionalZoom = zoom - integerZoom;
     const fractionalScale = Math.pow(2, fractionalZoom);
-    
+
     loadedTiles().forEach(({ img, tile }) => {
       if (tile.zoom !== integerZoom) return;
-      
+
       const tileSize = mapService.tileSize * fractionalScale;
       const tileWorldX = tile.x * tileSize;
       const tileWorldY = tile.y * tileSize;
-      
+
       const canvasX = tileWorldX - vp.x;
       const canvasY = tileWorldY - vp.y;
-      
+
       if (canvasX + tileSize >= 0 && canvasX < mapCanvasRef.width &&
           canvasY + tileSize >= 0 && canvasY < mapCanvasRef.height) {
         ctx.drawImage(img, canvasX, canvasY, tileSize, tileSize);
       }
     });
   }
-  
+
   function renderActivityMarkers(ctx) {
     const vp = viewport();
     const zoom = mapZoom();
-    
+
     activities().forEach(activity => {
       const worldPos = mapService.latLngToWorldPixel(activity.lat, activity.lng, zoom);
       const x = worldPos.x - vp.x;
       const y = worldPos.y - vp.y;
-      
+
       // Skip if outside viewport
-      if (x < -50 || x > mapCanvasRef.width + 50 || 
+      if (x < -50 || x > mapCanvasRef.width + 50 ||
           y < -50 || y > mapCanvasRef.height + 50) return;
-      
+
       // Draw marker
       ctx.save();
       ctx.translate(x, y);
-      
+
       // Outer circle
       ctx.beginPath();
       ctx.arc(0, 0, 20, 0, Math.PI * 2);
       ctx.fillStyle = selectedActivity()?.id === activity.id ? '#3b82f6' : '#ef4444';
       ctx.fill();
-      
+
       // Inner circle
       ctx.beginPath();
       ctx.arc(0, 0, 16, 0, Math.PI * 2);
       ctx.fillStyle = 'white';
       ctx.fill();
-      
+
       // Activity icon
       ctx.font = '16px sans-serif';
       ctx.fillStyle = selectedActivity()?.id === activity.id ? '#3b82f6' : '#ef4444';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('✨', 0, 0);
-      
+
       // Participant count
       if (activity.participantCount > 1) {
         ctx.beginPath();
@@ -304,52 +304,52 @@ export function ActivityView(props) {
         ctx.font = 'bold 10px sans-serif';
         ctx.fillText(activity.participantCount, 12, -12);
       }
-      
+
       ctx.restore();
     });
   }
-  
+
   function renderStreetIndicators(ctx) {
     const vp = viewport();
     const zoom = mapZoom();
-    
+
     Object.values(streetActivities()).forEach(group => {
       const worldPos = mapService.latLngToWorldPixel(group.center.lat, group.center.lng, zoom);
       const x = worldPos.x - vp.x;
       const y = worldPos.y - vp.y;
-      
+
       // Skip if outside viewport
-      if (x < -50 || x > mapCanvasRef.width + 50 || 
+      if (x < -50 || x > mapCanvasRef.width + 50 ||
           y < -50 || y > mapCanvasRef.height + 50) return;
-      
+
       // Draw street indicator
       ctx.save();
       ctx.translate(x, y);
-      
+
       // Background circle
       const radius = Math.min(30, 15 + group.count * 2);
       ctx.beginPath();
       ctx.arc(0, 0, radius, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(59, 130, 246, 0.8)';
       ctx.fill();
-      
+
       // Count text
       ctx.fillStyle = 'white';
       ctx.font = 'bold 14px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(group.count, 0, 0);
-      
+
       ctx.restore();
     });
   }
-  
+
   // Request activities for current viewport
   function requestActivities() {
     if (viewportUpdateTimeout) {
       clearTimeout(viewportUpdateTimeout);
     }
-    
+
     viewportUpdateTimeout = setTimeout(() => {
       if (props.wsManager && currentBounds()) {
         setIsLoadingActivities(true); // Set loading state
@@ -361,12 +361,12 @@ export function ActivityView(props) {
       }
     }, 50); // Reduced from 200ms to 50ms for faster loading
   }
-  
+
   // Handle activity selection
   function selectActivity(activity) {
     setSelectedActivity(activity);
     setShowActivityPanel(true);
-    
+
     // Join the activity
     if (props.wsManager) {
       props.wsManager.send({
@@ -375,7 +375,7 @@ export function ActivityView(props) {
       });
     }
   }
-  
+
   // Request user's activities to open most recent one
   function requestUserActivities() {
     if (!props.wsManager) {
@@ -383,25 +383,25 @@ export function ActivityView(props) {
       setTimeout(() => requestUserActivities(), 500);
       return;
     }
-    
+
     // Check if connected
     if (!props.connected) {
       // If not connected yet, wait for connection
       setTimeout(() => requestUserActivities(), 500);
       return;
     }
-    
+
     console.log('[ActivityView] Requesting user activities for auto-open');
     props.wsManager.send({ type: 'getMyActivities' });
   }
-  
+
   // Create new activity
   async function createActivity(data) {
     if (!props.wsManager) return;
-    
+
     const location = userLocation();
     const address = await mapService.getLocationName(data.lat || location.lat, data.lng || location.lng);
-    
+
     props.wsManager.send({
       type: 'createActivity',
       title: data.title,
@@ -411,15 +411,15 @@ export function ActivityView(props) {
       address: address?.displayName || '',
       street: address?.street || address?.road || 'Unknown Street'
     });
-    
+
     setShowCreateActivity(false);
   }
-  
+
   // Search for places
   async function handleSearch() {
     const query = searchQuery().trim();
     if (!query || isSearching()) return;
-    
+
     setIsSearching(true);
     try {
       const results = await mapService.searchPlaces(query);
@@ -430,27 +430,27 @@ export function ActivityView(props) {
     }
     setIsSearching(false);
   }
-  
+
   // Navigate to a search result
   function navigateToPlace(place) {
     console.log(`📍 Navigating to ${place.name}`);
-    
+
     // Update location
     setLocationName(place.city || place.name.split(',')[0]);
-    
+
     // Animate to location
     animateToLocation(place.lat, place.lng, 18); // Zoom to street level
-    
+
     // Close search
     setShowSearch(false);
     setSearchQuery('');
     setSearchResults([]);
   }
-  
+
   // Animate to a new location
   function animateToLocation(targetLat, targetLng, targetZoomLevel) {
     setTargetZoom(targetZoomLevel);
-    
+
     const currentZoom = mapZoom();
     const vp = viewport();
     const currentCenter = mapService.worldPixelToLatLng(
@@ -458,33 +458,33 @@ export function ActivityView(props) {
       vp.y + mapCanvasRef.height / 2,
       currentZoom
     );
-    
+
     const duration = 2000;
     const startTime = Date.now();
     const startLat = currentCenter.lat;
     const startLng = currentCenter.lng;
     const startZoom = currentZoom;
-    
+
     const animate = () => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
-      
+
       const currentLat = startLat + (targetLat - startLat) * eased;
       const currentLng = startLng + (targetLng - startLng) * eased;
       const currentZoom = startZoom + (targetZoomLevel - startZoom) * eased;
-      
+
       setMapZoom(currentZoom);
       updateViewport(currentLat, currentLng, currentZoom);
-      
+
       if (progress < 1) {
         requestAnimationFrame(animate);
       }
     };
-    
+
     requestAnimationFrame(animate);
   }
-  
+
   // Mouse handlers
   function handleMouseDown(e) {
     if (e.shiftKey || e.button === 1) {
@@ -495,19 +495,19 @@ export function ActivityView(props) {
       });
     }
   }
-  
+
   function handleMouseMove(e) {
     if (isPanning()) {
       const newX = panStart().x - e.clientX;
       const newY = panStart().y - e.clientY;
       setViewport({ x: newX, y: newY });
-      
+
       const newCenter = mapService.worldPixelToLatLng(
         newX + mapCanvasRef.width / 2,
         newY + mapCanvasRef.height / 2,
         mapZoom()
       );
-      
+
       const bounds = mapService.getViewportBounds(
         newCenter.lat,
         newCenter.lng,
@@ -515,30 +515,30 @@ export function ActivityView(props) {
         mapCanvasRef.height,
         mapZoom()
       );
-      
+
       setCurrentBounds(bounds);
       loadTilesForCurrentView();
       renderMap();
       requestActivities();
     }
   }
-  
+
   function handleMouseUp(e) {
     // Check if clicked on an activity marker
     if (!isPanning() && e.button === 0 && mapZoom() >= 17) {
       const rect = mapCanvasRef.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
-      
+
       // Check if clicked on any activity
       const vp = viewport();
       const zoom = mapZoom();
-      
+
       for (const activity of activities()) {
         const worldPos = mapService.latLngToWorldPixel(activity.lat, activity.lng, zoom);
         const actX = worldPos.x - vp.x;
         const actY = worldPos.y - vp.y;
-        
+
         const distance = Math.sqrt((x - actX) ** 2 + (y - actY) ** 2);
         if (distance <= 20) {
           selectActivity(activity);
@@ -546,22 +546,22 @@ export function ActivityView(props) {
         }
       }
     }
-    
+
     setIsPanning(false);
   }
-  
+
   function handleWheel(e) {
     e.preventDefault();
     const zoomSensitivity = 0.001;
     const delta = e.deltaY * zoomSensitivity;
-    
+
     const currentTarget = targetZoom();
     setTargetZoom(Math.max(mapService.minZoom, Math.min(mapService.maxZoom, currentTarget - delta)));
-    
+
     const rect = mapCanvasRef.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
-    
+
     if (!zoomAnimationFrame) {
       const vp = viewport();
       const mouseWorldX = mouseX + vp.x;
@@ -570,13 +570,13 @@ export function ActivityView(props) {
       animateZoom(mouseX, mouseY, mouseLatLng);
     }
   }
-  
+
   function animateZoom(mouseX, mouseY, mouseLatLng) {
     const animate = () => {
       const current = mapZoom();
       const target = targetZoom();
       const diff = target - current;
-      
+
       if (Math.abs(diff) < 0.01) {
         if (zoomAnimationFrame) {
           cancelAnimationFrame(zoomAnimationFrame);
@@ -584,23 +584,23 @@ export function ActivityView(props) {
         }
         return;
       }
-      
+
       const smoothing = 0.08;
       const newZoom = current + diff * smoothing;
-      
+
       const newWorldPos = mapService.latLngToWorldPixel(mouseLatLng.lat, mouseLatLng.lng, newZoom);
       const newViewportX = newWorldPos.x - mouseX;
       const newViewportY = newWorldPos.y - mouseY;
-      
+
       setViewport({ x: newViewportX, y: newViewportY });
       setMapZoom(newZoom);
-      
+
       const newCenter = mapService.worldPixelToLatLng(
         newViewportX + mapCanvasRef.width / 2,
         newViewportY + mapCanvasRef.height / 2,
         newZoom
       );
-      
+
       const bounds = mapService.getViewportBounds(
         newCenter.lat,
         newCenter.lng,
@@ -608,21 +608,21 @@ export function ActivityView(props) {
         mapCanvasRef.height,
         newZoom
       );
-      
+
       setCurrentBounds(bounds);
       loadTilesForCurrentView();
       renderMap();
-      
+
       if (Math.abs(diff) < 0.5 || Math.floor(current) !== Math.floor(newZoom)) {
         requestActivities();
       }
-      
+
       zoomAnimationFrame = requestAnimationFrame(animate);
     };
-    
+
     zoomAnimationFrame = requestAnimationFrame(animate);
   }
-  
+
   function animateZoomToCenter() {
     const centerX = mapCanvasRef.width / 2;
     const centerY = mapCanvasRef.height / 2;
@@ -630,12 +630,12 @@ export function ActivityView(props) {
     const centerWorldX = centerX + vp.x;
     const centerWorldY = centerY + vp.y;
     const centerLatLng = mapService.worldPixelToLatLng(centerWorldX, centerWorldY, mapZoom());
-    
+
     if (!zoomAnimationFrame) {
       animateZoom(centerX, centerY, centerLatLng);
     }
   }
-  
+
   // WebSocket message handlers
   createEffect(() => {
     if (props.wsManager) {
@@ -650,10 +650,10 @@ export function ActivityView(props) {
         setIsLoadingActivities(false); // Clear loading state
         renderMap();
       });
-      
+
       const cleanup2 = props.wsManager.on('activityCreated', (data) => {
         // Add new activity to the list if it's in the current bounds
-        if (data.activity && currentBounds() && 
+        if (data.activity && currentBounds() &&
             isInBounds(data.activity.lat, data.activity.lng, currentBounds())) {
           setActivities(prev => {
             // Check if activity already exists
@@ -665,13 +665,13 @@ export function ActivityView(props) {
           // Re-render the map to show new marker
           renderMap();
         }
-        
+
         // If this is the activity we just created, select it
         if (data.isOwnCreation) {
           selectActivity(data.activity);
         }
       });
-      
+
       const cleanup3 = props.wsManager.on('activityUpdate', (data) => {
         // Update activity in list
         setActivities(prev => {
@@ -686,15 +686,15 @@ export function ActivityView(props) {
         });
         renderMap();
       });
-      
+
       // Remove default activity handler - no longer needed
-      
+
       let hasAutoOpenedCanvas = false;
       const cleanup5 = props.wsManager.on('myActivities', (data) => {
         console.log('[ActivityView] Received my activities:', data.activities?.length);
         setMyActivities(data.activities || []);
         setIsLoadingActivities(false); // Clear loading state
-        
+
         // Auto-open most recent canvas on first load
         if (!hasAutoOpenedCanvas && !selectedActivity() && data.activities && data.activities.length > 0) {
           hasAutoOpenedCanvas = true;
@@ -704,14 +704,14 @@ export function ActivityView(props) {
           selectActivity(mostRecent);
         }
       });
-      
+
       const cleanup6 = props.wsManager.on('activityDeleted', (data) => {
         console.log('[ActivityView] Activity deleted:', data.activityId);
-        
+
         // Remove from activities list
         setActivities(prev => prev.filter(a => a.id !== data.activityId));
         setMyActivities(prev => prev.filter(a => a.id !== data.activityId));
-        
+
         // Close if currently viewing this activity
         if (selectedActivity()?.id === data.activityId) {
           setSelectedActivity(null);
@@ -719,11 +719,11 @@ export function ActivityView(props) {
             alert('This canvas has been deleted by the owner.');
           }
         }
-        
+
         // Re-render the map
         renderMap();
       });
-      
+
       onCleanup(() => {
         cleanup1();
         cleanup2();
@@ -740,7 +740,7 @@ export function ActivityView(props) {
           clearInterval(activityPollingInterval);
         }
       });
-      
+
       // Set up polling for new activities every 5 seconds when on street level
       createEffect(() => {
         if (mapZoom() >= 17 && currentBounds() && props.wsManager) {
@@ -748,7 +748,7 @@ export function ActivityView(props) {
           if (activityPollingInterval) {
             clearInterval(activityPollingInterval);
           }
-          
+
           // Set up new interval
           activityPollingInterval = setInterval(() => {
             if (!isLoadingActivities() && !showMyActivities()) {
@@ -770,7 +770,7 @@ export function ActivityView(props) {
       });
     }
   });
-  
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       {/* Map View */}
@@ -806,13 +806,13 @@ export function ActivityView(props) {
               const newX = panStart().x - e.touches[0].clientX;
               const newY = panStart().y - e.touches[0].clientY;
               setViewport({ x: newX, y: newY });
-              
+
               const newCenter = mapService.worldPixelToLatLng(
                 newX + mapCanvasRef.width / 2,
                 newY + mapCanvasRef.height / 2,
                 mapZoom()
               );
-              
+
               const bounds = mapService.getViewportBounds(
                 newCenter.lat,
                 newCenter.lng,
@@ -820,7 +820,7 @@ export function ActivityView(props) {
                 mapCanvasRef.height,
                 mapZoom()
               );
-              
+
               setCurrentBounds(bounds);
               loadTilesForCurrentView();
               renderMap();
@@ -831,7 +831,7 @@ export function ActivityView(props) {
           onTouchEnd={() => setIsPanning(false)}
         />
       </div>
-      
+
       {/* Location Header */}
       <div style={{
         position: 'absolute',
@@ -871,7 +871,7 @@ export function ActivityView(props) {
           </Show>
         </div>
       </div>
-      
+
       {/* Activity List Panel */}
       <Show when={mapZoom() >= 17 && !selectedActivity()}>
         <div style={{
@@ -901,7 +901,7 @@ export function ActivityView(props) {
             padding: '20px',
             'border-bottom': '1px solid rgba(0, 0, 0, 0.1)'
           }}>
-            <div style={{ 
+            <div style={{
               display: 'flex',
               'align-items': 'center',
               'justify-content': 'space-between',
@@ -992,7 +992,7 @@ export function ActivityView(props) {
               </button>
             </div>
           </div>
-          
+
           <div style={{
             flex: 1,
             'overflow-y': 'auto',
@@ -1134,17 +1134,13 @@ export function ActivityView(props) {
           </div>
         </div>
       </Show>
-      
-      
+
+
       {/* Selected Activity Canvas */}
       <Show when={selectedActivity()}>
-        <ActivityCanvas
+        <FabricCanvas
           activity={selectedActivity()}
           wsManager={props.wsManager}
-          color={props.color}
-          brushSize={props.brushSize}
-          setColor={props.setColor}
-          setBrushSize={props.setBrushSize}
           onClose={() => {
             const activity = selectedActivity();
             setSelectedActivity(null);
@@ -1157,7 +1153,7 @@ export function ActivityView(props) {
           }}
         />
       </Show>
-      
+
       {/* Create Activity Modal */}
       <Show when={showCreateActivity()}>
         <CreateActivityModal
@@ -1165,8 +1161,8 @@ export function ActivityView(props) {
           onClose={() => setShowCreateActivity(false)}
         />
       </Show>
-      
-      
+
+
       {/* Search UI */}
       <Show when={props.showSearch}>
         <div style={{
@@ -1221,7 +1217,7 @@ export function ActivityView(props) {
               {isSearching() ? '...' : 'Search'}
             </button>
           </div>
-          
+
           {searchResults().length > 0 && (
             <div style={{ 'max-height': '300px', 'overflow-y': 'auto' }}>
               {searchResults().map(place => (
@@ -1256,17 +1252,17 @@ export function ActivityView(props) {
               ))}
             </div>
           )}
-          
+
           {searchResults().length === 0 && searchQuery() && !isSearching() && (
-            <div style={{ 
-              color: 'rgba(255, 255, 255, 0.5)', 
+            <div style={{
+              color: 'rgba(255, 255, 255, 0.5)',
               'text-align': 'center',
               padding: '20px'
             }}>
               No results found
             </div>
           )}
-          
+
           {/* Close button for search */}
           <button
             onClick={() => {
@@ -1305,7 +1301,7 @@ export function ActivityView(props) {
           </button>
         </div>
       </Show>
-      
+
       {/* Navigation Help - Desktop Only */}
       <Show when={window.innerWidth > 768}>
         <div style={{
@@ -1325,7 +1321,7 @@ export function ActivityView(props) {
           <div>/ Search places</div>
         </div>
       </Show>
-      
+
       {/* Mobile Bottom Bar */}
       <Show when={window.innerWidth <= 768 && !selectedActivity()}>
         <div style={{
@@ -1362,14 +1358,14 @@ export function ActivityView(props) {
           >
             ➖
           </button>
-          
+
           <span style={{
             'font-size': '14px',
             'font-weight': '500'
           }}>
             Zoom: {mapZoom().toFixed(1)}
           </span>
-          
+
           <button
             onClick={() => {
               setTargetZoom(prev => Math.min(mapService.maxZoom, prev + 1));
@@ -1390,7 +1386,7 @@ export function ActivityView(props) {
           >
             ➕
           </button>
-          
+
           <button
             onClick={async () => {
               await getUserLocation();
@@ -1413,7 +1409,7 @@ export function ActivityView(props) {
           </button>
         </div>
       </Show>
-      
+
       {/* Style tag */}
       <style>{`
         @keyframes spin {
@@ -1429,7 +1425,7 @@ export function ActivityView(props) {
 function CreateActivityModal(props) {
   const [title, setTitle] = createSignal('');
   const [description, setDescription] = createSignal('');
-  
+
   return (
     <div style={{
       position: 'fixed',
@@ -1448,7 +1444,7 @@ function CreateActivityModal(props) {
         'box-shadow': '0 10px 50px rgba(0, 0, 0, 0.3)'
       }}>
         <h2 style={{ margin: '0 0 20px 0' }}>Create New Canvas</h2>
-        
+
         <input
           type="text"
           placeholder="Canvas Title"
@@ -1463,7 +1459,7 @@ function CreateActivityModal(props) {
             'font-size': '16px'
           }}
         />
-        
+
         <textarea
           placeholder="Description (optional)"
           value={description()}
@@ -1479,7 +1475,7 @@ function CreateActivityModal(props) {
             'min-height': '80px'
           }}
         />
-        
+
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
             onClick={() => props.onCreate({ title: title(), description: description() })}

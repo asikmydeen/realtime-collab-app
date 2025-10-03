@@ -45,3 +45,9 @@ temp/
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
+
+# Database files
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3

@@ -1,4 +1,4 @@
-import { createSignal, onMount, onCleanup, createEffect } from 'solid-js';
+import { createSignal, onMount, onCleanup, createEffect, Show } from 'solid-js';
 import { Route } from '@solidjs/router';
 import { MapView } from './pages/MapView';
 import { ListView } from './pages/ListView';
@@ -7,8 +7,14 @@ import { WasmProcessor } from './lib/wasm';
 import { config } from './config';
 import { getUserColor, generateUsername } from './utils/userColors';
 import { inject } from '@vercel/analytics';
+import { authClient, useSession } from './lib/auth';
+import { Auth } from './components/Auth';
 
 function App() {
+  // Auth state
+  const session = useSession();
+  const [showAuth, setShowAuth] = createSignal(false);
+  
   // State management
   const [connected, setConnected] = createSignal(false);
   const [users, setUsers] = createSignal(new Map());
@@ -16,7 +22,7 @@ function App() {
   const [tool, setTool] = createSignal('pen');
   const [color, setColor] = createSignal('#000000');
   const [brushSize, setBrushSize] = createSignal(3);
-  const [username, setUsername] = createSignal(generateUsername());
+  const [username, setUsername] = createSignal('');
   
   // Performance metrics
   const [fps, setFps] = createSignal(60);
@@ -28,6 +34,16 @@ function App() {
   const [wsManager, setWsManager] = createSignal(null);
   const [wasmProcessor, setWasmProcessor] = createSignal(null);
   
+  // Update username when session changes
+  createEffect(() => {
+    const currentSession = session();
+    if (currentSession?.user) {
+      setUsername(currentSession.user.name || currentSession.user.email.split('@')[0]);
+    } else {
+      setUsername(generateUsername());
+    }
+  });
+  
   onMount(async () => {
     // Initialize Vercel Analytics
     inject();
@@ -37,9 +53,12 @@ function App() {
     await wasm.init();
     setWasmProcessor(wasm);
     
-    // Initialize WebSocket
+    // Initialize WebSocket with auth token getter
     console.log('WebSocket URL from config:', config.wsUrl);
-    const ws = new WebSocketManager(config.wsUrl);
+    const ws = new WebSocketManager(config.wsUrl, () => {
+      const currentSession = session();
+      return currentSession?.token || null;
+    });
     
     ws.on('connected', () => {
       setConnected(true);
@@ -50,10 +69,12 @@ function App() {
       const userIndex = users().size;
       const userColor = getUserColor(userIndex);
       const user = {
-        id: data.clientId,
+        id: data.userId || data.clientId, // Use real user ID if available
+        clientId: data.clientId,
         name: username(),
         color: userColor,
-        isMe: true
+        isMe: true,
+        authenticated: !!data.userId
       };
       setCurrentUser(user);
       setUsers(prev => {

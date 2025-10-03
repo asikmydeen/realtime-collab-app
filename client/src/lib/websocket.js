@@ -1,6 +1,7 @@
 export class WebSocketManager {
-  constructor(url) {
+  constructor(url, getAuthToken) {
     this.url = url;
+    this.getAuthToken = getAuthToken; // Function to get current auth token
     this.ws = null;
     this.listeners = new Map();
     this.reconnectAttempts = 0;
@@ -8,18 +9,27 @@ export class WebSocketManager {
     this.reconnectDelay = 1000;
     this.pingInterval = null;
     this.latency = 0;
+    this.userId = null;
   }
 
   connect() {
     console.log('Connecting to WebSocket server...');
     
-    // Add stored user hash to connection URL
+    // Add auth token to connection URL if available
     let connectUrl = this.url;
-    const storedHash = localStorage.getItem('userHash');
-    if (storedHash) {
+    const authToken = this.getAuthToken?.();
+    if (authToken) {
       const separator = connectUrl.includes('?') ? '&' : '?';
-      connectUrl = `${connectUrl}${separator}userHash=${storedHash}`;
-      console.log('Connecting with stored userHash:', storedHash);
+      connectUrl = `${connectUrl}${separator}token=${encodeURIComponent(authToken)}`;
+      console.log('Connecting with auth token');
+    } else {
+      // Fallback to legacy userHash for backward compatibility
+      const storedHash = localStorage.getItem('userHash');
+      if (storedHash) {
+        const separator = connectUrl.includes('?') ? '&' : '?';
+        connectUrl = `${connectUrl}${separator}userHash=${storedHash}`;
+        console.log('Connecting with legacy userHash');
+      }
     }
     
     console.log('WebSocket URL:', connectUrl);
@@ -76,9 +86,10 @@ export class WebSocketManager {
     switch (data.type) {
       case 'welcome':
         this.clientId = data.clientId;
-        this.userHash = data.userHash; // Store persistent user hash
-        // Store in localStorage for persistence across sessions
-        if (data.userHash) {
+        this.userId = data.userId; // Real user ID from auth
+        this.userHash = data.userHash; // Legacy support
+        // Only store userHash if no auth token (legacy mode)
+        if (!this.getAuthToken?.() && data.userHash) {
           localStorage.setItem('userHash', data.userHash);
         }
         this.emit('welcome', data);

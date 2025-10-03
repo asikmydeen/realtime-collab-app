@@ -4,7 +4,6 @@ import { WebSocketServer } from 'ws';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import { createServer } from 'http';
-import { createClient } from 'redis';
 import sharp from 'sharp';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -18,58 +17,30 @@ import ViewportManager from './viewportManager.js';
 import { GeoDrawingPersistence } from './geoDrawingPersistence.js';
 import { ActivityPersistence } from './activityPersistence.js';
 import { UserIdentityManager } from './userIdentity.js';
+import { initializeRedis } from './redisClient.js';
+import { authHandler } from './config/auth.config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Initialize Express
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  credentials: true
+}));
 app.use(express.json({ limit: '50mb' }));
 
-// Redis for scaling (optional)
-let redis = null;
-try {
-  // Use Redis Cloud configuration if credentials are available
-  if (process.env.REDIS_HOST && process.env.REDIS_PASSWORD) {
-    redis = createClient({
-      username: 'default',
-      password: process.env.REDIS_PASSWORD,
-      socket: {
-        host: process.env.REDIS_HOST,
-        port: parseInt(process.env.REDIS_PORT || '6379')
-      }
-    });
-  } else if (process.env.REDIS_URL) {
-    // Fallback to Redis URL format
-    redis = createClient({
-      url: process.env.REDIS_URL
-    });
-  } else {
-    // Local Redis
-    redis = createClient({
-      url: 'redis://localhost:6379'
-    });
-  }
-  
-  redis.on('error', err => console.error('Redis Client Error:', err));
-  
-  await redis.connect();
-  console.log('✅ Redis connected successfully');
-  
-  // Test connection
-  await redis.set('test_connection', 'ok');
-  const test = await redis.get('test_connection');
-  console.log('✅ Redis test:', test);
-} catch (error) {
-  console.log('⚠️ Redis not available, using in-memory state:', error.message);
-  redis = null;
-}
+// Auth routes
+app.all('/api/auth/*', authHandler);
+
+// Initialize Redis
+const redis = await initializeRedis();
 
 // HTTP server
 const server = createServer(app);
 
 // WebSocket server
-const wss = new WebSocketServer({ 
+const wss = new WebSocketServer({
   server,
   perMessageDeflate: {
     zlibDeflateOptions: {
@@ -140,7 +111,7 @@ class Room {
   addClient(clientId, ws) {
     this.clients.add(clientId);
     this.lastActivity = Date.now();
-    
+
     // Send current state to new client
     ws.send(JSON.stringify({
       type: 'init',
@@ -157,14 +128,14 @@ class Room {
         };
       })
     }));
-    
+
     // Send pixel data for pixel canvas mode
     const pixels = [];
     pixelOwners.forEach((data, key) => {
       const [x, y] = key.split(',').map(Number);
       pixels.push({ x, y, ...data });
     });
-    
+
     if (pixels.length > 0) {
       ws.send(JSON.stringify({
         type: 'bulkPixelUpdate',
@@ -205,12 +176,12 @@ class Room {
       ...operation,
       timestamp: Date.now()
     });
-    
+
     // Keep only last 10000 operations
     if (this.drawingHistory.length > 10000) {
       this.drawingHistory = this.drawingHistory.slice(-5000);
     }
-    
+
     this.lastActivity = Date.now();
   }
 
@@ -232,17 +203,17 @@ connectionManager.on('connection', async (ws, req) => {
   const clientId = uuidv4();
   const clientIp = req.socket.remoteAddress;
   const userAgent = req.headers['user-agent'] || 'unknown';
-  
+
   console.log(`👤 New client connected: ${clientId} from ${clientIp}`);
-  
+
   // Check for userHash in URL
   const url = new URL(req.url || '', `http://${req.headers.host}`);
   const urlUserHash = url.searchParams.get('userHash');
-  
+
   // Get or create user hash
   const clientInfo = { ip: clientIp, userAgent };
   let userHash;
-  
+
   if (urlUserHash) {
     console.log(`[Auth] Client provided userHash in URL: ${urlUserHash}`);
     // Verify it exists
@@ -259,7 +230,7 @@ connectionManager.on('connection', async (ws, req) => {
     userHash = await userIdentityManager.getOrCreateUserHash(clientInfo);
     console.log(`[Auth] Generated new user hash for ${clientId}: ${userHash}`);
   }
-  
+
   // Store client
   clients.set(clientId, {
     id: clientId,
@@ -269,7 +240,7 @@ connectionManager.on('connection', async (ws, req) => {
     userHash, // Persistent user identifier
     location: null
   });
-  
+
   // Send welcome message
   ws.send(JSON.stringify({
     type: 'welcome',
@@ -283,7 +254,7 @@ connectionManager.on('connection', async (ws, req) => {
       totalMessages
     }
   }));
-  
+
   // Heartbeat
   ws.isAlive = true;
   ws.on('pong', () => {
@@ -293,55 +264,55 @@ connectionManager.on('connection', async (ws, req) => {
   // Message handler
   ws.on('message', async (data) => {
     totalMessages++;
-    
+
     try {
       const message = JSON.parse(data);
       const client = clients.get(clientId);
-      
+
       switch (message.type) {
         case 'authenticate':
           handleAuthenticate(clientId, message);
           break;
-          
+
         case 'join':
           handleJoinRoom(clientId, message.room || 'default', message.username);
           break;
-          
+
         case 'draw':
           console.log(`[Server] Received draw message from ${clientId}:`, message);
           // Use world canvas draw handler for the infinite canvas
           handleWorldCanvasDraw(clientId, message);
           break;
-          
+
         case 'cursor':
           handleCursor(clientId, message);
           break;
-          
+
         case 'clear':
           handleClear(clientId);
           break;
-          
+
         case 'image':
           handleImageProcess(clientId, message);
           break;
-          
+
         case 'switchRegion':
           handleRegionSwitch(clientId, message.regionId);
           break;
-          
+
         case 'requestChunk':
           handleChunkRequest(clientId, message.chunkId);
           break;
-          
+
         case 'pixelPlace':
           handlePixelPlace(clientId, message);
           break;
-          
+
         case 'ping':
-          ws.send(JSON.stringify({ 
-            type: 'pong', 
+          ws.send(JSON.stringify({
+            type: 'pong',
             timestamp: Date.now(),
-            latency: Date.now() - message.timestamp 
+            latency: Date.now() - message.timestamp
           }));
           break;
 
@@ -349,95 +320,112 @@ connectionManager.on('connection', async (ws, req) => {
         case 'requestSpace':
           handleRequestSpace(clientId, message);
           break;
-          
+
         case 'activity':
           handleActivity(clientId, message);
           break;
-          
+
         case 'markDrawn':
           handleMarkDrawn(clientId);
           break;
-          
+
         case 'releaseSpace':
           handleReleaseSpace(clientId);
           break;
-          
+
         case 'loadDrawings':
           handleLoadDrawings(clientId, message);
           break;
-          
+
         case 'updateViewport':
           handleViewportUpdate(clientId, message);
           break;
-          
+
         case 'geoDraw':
           handleGeoDraw(clientId, message);
           break;
-          
+
         case 'setLocation':
           handleSetLocation(clientId, message);
           break;
-          
+
         case 'updateGeoViewport':
           handleGeoViewportUpdate(clientId, message);
           break;
-          
+
         case 'requestWorldArtwork':
           handleRequestWorldArtwork(clientId, message);
           break;
-          
+
         case 'createActivity':
           handleCreateActivity(clientId, message);
           break;
-          
+
         case 'getActivities':
           handleGetActivities(clientId, message);
           break;
-          
+
         case 'joinActivity':
           handleJoinActivity(clientId, message);
           break;
-          
+
         case 'leaveActivity':
           handleLeaveActivity(clientId, message);
           break;
-          
+
         case 'activityDraw':
           handleActivityDraw(clientId, message);
           break;
-          
+
         // Removed getDefaultActivity - no longer creating default canvases
-          
+
         case 'getMyActivities':
           handleGetMyActivities(clientId, message);
           break;
-          
+
         case 'updateActivityPermissions':
           handleUpdateActivityPermissions(clientId, message);
           break;
-          
+
         case 'deleteActivity':
           handleDeleteActivity(clientId, message);
           break;
-          
+
         case 'getAllActivities':
           handleGetAllActivities(clientId, message);
           break;
-          
+
         case 'deleteAllActivities':
           handleDeleteAllActivities(clientId, message);
           break;
-          
+
         case 'removeUserDrawing':
           handleRemoveUserDrawing(clientId, message);
           break;
-          
+
         case 'requestContribution':
           handleRequestContribution(clientId, message);
           break;
-          
+
         case 'approveContributor':
           handleApproveContributor(clientId, message);
+          break;
+
+        // Fabric.js canvas handlers
+        case 'fabricObjectAdded':
+          handleFabricObjectAdded(clientId, message);
+          break;
+
+        case 'fabricObjectModified':
+          handleFabricObjectModified(clientId, message);
+          break;
+
+        case 'fabricObjectRemoved':
+          handleFabricObjectRemoved(clientId, message);
+          break;
+
+        case 'fabricCursor':
+          handleFabricCursor(clientId, message);
           break;
 
         default:
@@ -445,17 +433,17 @@ connectionManager.on('connection', async (ws, req) => {
       }
     } catch (error) {
       console.error('Message error:', error);
-      ws.send(JSON.stringify({ 
-        type: 'error', 
-        message: 'Invalid message format' 
+      ws.send(JSON.stringify({
+        type: 'error',
+        message: 'Invalid message format'
       }));
     }
   });
-  
+
   // Disconnect handler
   ws.on('close', () => {
     console.log(`👋 Client disconnected: ${clientId}`);
-    
+
     const client = clients.get(clientId);
     if (client && client.room) {
       const room = rooms.get(client.room);
@@ -465,20 +453,20 @@ connectionManager.on('connection', async (ws, req) => {
           type: 'userLeft',
           clientId
         }, clientId);
-        
+
         // Clean up empty rooms
         if (room.clients.size === 0) {
           rooms.delete(client.room);
         }
       }
     }
-    
+
     // Clean up message batcher
     messageBatcher.removeClient(clientId);
-    
+
     // Clean up viewport manager
     viewportManager.removeClient(clientId);
-    
+
     // Notify others that artist went offline
     if (client && client.location) {
       const locationUpdate = {
@@ -486,17 +474,17 @@ connectionManager.on('connection', async (ws, req) => {
         clientId,
         active: false
       };
-      
+
       clients.forEach((targetClient) => {
         if (targetClient.ws.readyState === 1) {
           targetClient.ws.send(JSON.stringify(locationUpdate));
         }
       });
     }
-    
+
     clients.delete(clientId);
     cleanupInfiniteCanvas(clientId);
-    
+
     // Release space on disconnect
     spaceManager.releaseUserSpace(clientId);
   });
@@ -510,7 +498,7 @@ connectionManager.on('connection', async (ws, req) => {
 function handleJoinRoom(clientId, roomId, username) {
   const client = clients.get(clientId);
   if (!client) return;
-  
+
   // Leave current room if any
   if (client.room) {
     const oldRoom = rooms.get(client.room);
@@ -518,20 +506,20 @@ function handleJoinRoom(clientId, roomId, username) {
       oldRoom.removeClient(clientId);
     }
   }
-  
+
   // Join new room
   let room = rooms.get(roomId);
   if (!room) {
     room = new Room(roomId);
     rooms.set(roomId, room);
   }
-  
+
   room.addClient(clientId, client.ws);
   client.room = roomId;
-  
+
   // Store username with client
   client.username = username || `User ${clientId.slice(-4)}`;
-  
+
   // Notify others
   room.broadcast({
     type: 'userJoined',
@@ -539,19 +527,19 @@ function handleJoinRoom(clientId, roomId, username) {
     username: client.username,
     totalUsers: room.clients.size
   }, clientId);
-  
+
   console.log(`📍 Client ${clientId} joined room ${roomId}`);
 }
 
 function handleDraw(clientId, message) {
   const client = clients.get(clientId);
   if (!client || !client.room) return;
-  
+
   const room = rooms.get(client.room);
   if (!room) return;
-  
+
   totalOperations++;
-  
+
   const drawOp = {
     id: uuidv4(),
     clientId,
@@ -563,11 +551,11 @@ function handleDraw(clientId, message) {
     size: message.size,
     tool: message.tool || 'pen'
   };
-  
+
   room.addDrawingOperation(drawOp);
-  
+
   console.log(`📝 Broadcasting draw from ${clientId.slice(-4)} to ${room.clients.size - 1} other clients`);
-  
+
   room.broadcast({
     type: 'draw',
     ...drawOp
@@ -580,14 +568,14 @@ function handleCursor(clientId, message) {
 
   const room = rooms.get(client.room);
   if (!room) return;
-  
+
   room.updateCursor(clientId, {
     x: message.x,
     y: message.y,
     color: message.color,
     name: message.name || `User ${clientId.slice(-4)}`
   });
-  
+
   room.broadcast({
     type: 'cursor',
     clientId,
@@ -601,10 +589,10 @@ function handleCursor(clientId, message) {
 function handleClear(clientId) {
   const client = clients.get(clientId);
   if (!client || !client.room) return;
-  
+
   const room = rooms.get(client.room);
   if (!room) return;
-  
+
   room.drawingHistory = [];
   room.broadcast({
     type: 'clear'
@@ -614,18 +602,18 @@ function handleClear(clientId) {
 async function handleImageProcess(clientId, message) {
   const client = clients.get(clientId);
   if (!client) return;
-  
+
   try {
     // Use Sharp for image processing (WebAssembly-based)
     const imageBuffer = Buffer.from(message.imageData, 'base64');
-    
+
     const processed = await sharp(imageBuffer)
       .resize(800, 600, { fit: 'inside' })
       .blur(message.blur || 0)
       .sharpen(message.sharpen || 0)
       .normalize(message.normalize || false)
       .toBuffer();
-    
+
     client.ws.send(JSON.stringify({
       type: 'processedImage',
       imageData: processed.toString('base64')
@@ -654,7 +642,7 @@ const heartbeatInterval = setInterval(() => {
 setInterval(() => {
   const now = Date.now();
   const timeout = 60 * 60 * 1000; // 1 hour
-  
+
   rooms.forEach((room, id) => {
     if (room.clients.size === 0 && now - room.lastActivity > timeout) {
       rooms.delete(id);
@@ -669,7 +657,7 @@ app.get('/health', async (req, res) => {
   const connectionStats = connectionManager.getStats();
   const batcherStats = messageBatcher.getStats();
   const viewportStats = viewportManager.getStats();
-  
+
   res.json({
     status: 'healthy',
     clients: clients.size,
@@ -729,7 +717,7 @@ async function handleInfiniteCanvasDraw(clientId, message) {
 
   // Process draw operation
   const affectedClients = await infiniteCanvas.handleDrawOperation(clientId, message);
-  
+
   // Broadcast to clients in the same region
   const drawOp = {
     type: 'remoteDraw',
@@ -759,10 +747,10 @@ const pixelCooldowns = new Map(); // clientId -> last placed timestamp
 function handlePixelPlace(clientId, message) {
   const client = clients.get(clientId);
   if (!client) return;
-  
+
   const { x, y, color } = message;
   const pixelKey = `${x},${y}`;
-  
+
   // Check cooldown (5 seconds)
   const lastPlaced = pixelCooldowns.get(clientId) || 0;
   const now = Date.now();
@@ -774,7 +762,7 @@ function handlePixelPlace(clientId, message) {
     }));
     return;
   }
-  
+
   // Check if pixel is already owned by someone else
   const currentOwner = pixelOwners.get(pixelKey);
   if (currentOwner && currentOwner.owner !== clientId) {
@@ -785,7 +773,7 @@ function handlePixelPlace(clientId, message) {
     }));
     return;
   }
-  
+
   // Place the pixel
   pixelOwners.set(pixelKey, {
     owner: clientId,
@@ -793,9 +781,9 @@ function handlePixelPlace(clientId, message) {
     timestamp: now,
     username: client.username
   });
-  
+
   pixelCooldowns.set(clientId, now);
-  
+
   // Broadcast to all clients in the room
   const room = client.room || 'default';
   const roomObj = rooms.get(room);
@@ -809,7 +797,7 @@ function handlePixelPlace(clientId, message) {
       timestamp: now
     });
   }
-  
+
   console.log(`Pixel placed at (${x},${y}) by ${clientId}`);
 }
 
@@ -817,18 +805,18 @@ function handlePixelPlace(clientId, message) {
 function handleRequestSpace(clientId, message) {
   const client = clients.get(clientId);
   if (!client) return;
-  
+
   const space = spaceManager.assignSpace(
-    clientId, 
-    message.viewportWidth, 
+    clientId,
+    message.viewportWidth,
     message.viewportHeight
   );
-  
+
   client.ws.send(JSON.stringify({
     type: 'spaceAssigned',
     space
   }));
-  
+
   // Broadcast space update to all clients
   broadcastSpaceUpdate();
 }
@@ -848,7 +836,7 @@ function handleReleaseSpace(clientId) {
 
 function broadcastSpaceUpdate() {
   const allSpaces = spaceManager.getAllSpaces();
-  
+
   // Broadcast to all connected clients
   clients.forEach((client) => {
     if (client.ws.readyState === 1) {
@@ -867,16 +855,16 @@ function handleWorldCanvasDraw(clientId, message) {
     console.error(`[Draw] Client ${clientId} not found`);
     return;
   }
-  
+
   console.log(`[Draw] Received from ${clientId}:`, { drawType: message.drawType, x: message.x, y: message.y });
-  
+
   // Update activity when drawing
   if (message.drawType === 'draw' || message.drawType === 'start') {
     spaceManager.updateActivity(clientId, true);
   }
-  
+
   totalOperations++;
-  
+
   // Handle drawing path tracking
   if (message.drawType === 'start') {
     // Start a new path
@@ -892,15 +880,15 @@ function handleWorldCanvasDraw(clientId, message) {
     if (client.currentPath) {
       client.currentPath.points.push({ x: message.x, y: message.y });
     }
-    
+
     if (!client.lastDrawPos) {
       client.lastDrawPos = { x: message.x, y: message.y };
     }
-    
+
     // Add last position to message for smooth lines
     message.lastX = client.lastDrawPos.x;
     message.lastY = client.lastDrawPos.y;
-    
+
     client.lastDrawPos = { x: message.x, y: message.y };
   } else if (message.drawType === 'end') {
     // Save completed path
@@ -909,14 +897,14 @@ function handleWorldCanvasDraw(clientId, message) {
         console.error('Failed to save drawing path:', err);
       });
     }
-    
+
     client.currentPath = null;
     client.lastDrawPos = null;
   }
-  
+
   // Remove the 'type' field from message before broadcasting to avoid conflicts
   const { type, ...drawData } = message;
-  
+
   // Broadcast to clients with viewport filtering
   let broadcastCount = 0;
   const broadcastMessage = {
@@ -924,7 +912,7 @@ function handleWorldCanvasDraw(clientId, message) {
     clientId,
     ...drawData  // This now excludes the original 'type' field
   };
-  
+
   // Get clients that can see this drawing
   let visibleClients;
   if (message.drawType === 'draw' && message.x !== undefined && message.y !== undefined) {
@@ -937,7 +925,7 @@ function handleWorldCanvasDraw(clientId, message) {
     // For start events or fallback, use all clients
     visibleClients = new Set(clients.keys());
   }
-  
+
   visibleClients.forEach(targetId => {
     if (targetId !== clientId) {
       const targetClient = clients.get(targetId);
@@ -951,7 +939,7 @@ function handleWorldCanvasDraw(clientId, message) {
       }
     }
   });
-  
+
   console.log(`[Draw] Broadcasted to ${broadcastCount}/${clients.size - 1} visible clients`);
 }
 
@@ -959,13 +947,13 @@ function handleWorldCanvasDraw(clientId, message) {
 async function handleLoadDrawings(clientId, message) {
   const client = clients.get(clientId);
   if (!client) return;
-  
+
   const { x, y, width, height } = message.viewport || { x: -2500, y: -2500, width: 5000, height: 5000 };
-  
+
   try {
     console.log(`[Load] Loading drawings for viewport: ${x},${y} ${width}x${height}`);
     const drawings = await drawingPersistence.loadDrawingsInViewport(x, y, width, height);
-    
+
     // If no drawings, send empty response
     if (drawings.length === 0) {
       client.ws.send(JSON.stringify({
@@ -977,25 +965,25 @@ async function handleLoadDrawings(clientId, message) {
       console.log(`[Load] No drawings found for viewport`);
       return;
     }
-    
+
     // Send drawings in batches to avoid overwhelming the client
     const batchSize = 50;
     for (let i = 0; i < drawings.length; i += batchSize) {
       const batch = drawings.slice(i, i + batchSize);
-      
+
       client.ws.send(JSON.stringify({
         type: 'drawingHistory',
         drawings: batch,
         batchIndex: Math.floor(i / batchSize),
         totalBatches: Math.ceil(drawings.length / batchSize)
       }));
-      
+
       // Small delay between batches
       if (i + batchSize < drawings.length) {
         await new Promise(resolve => setTimeout(resolve, 10));
       }
     }
-    
+
     console.log(`[Load] Sent ${drawings.length} drawings in ${Math.ceil(drawings.length / batchSize)} batches`);
   } catch (error) {
     console.error('Failed to load drawings:', error);
@@ -1020,9 +1008,9 @@ async function getDrawingStats() {
 // Handle viewport update
 function handleViewportUpdate(clientId, message) {
   if (!message.viewport) return;
-  
+
   const { x, y, width, height, zoom } = message.viewport;
-  
+
   viewportManager.updateViewport(clientId, {
     x: x || 0,
     y: y || 0,
@@ -1030,7 +1018,7 @@ function handleViewportUpdate(clientId, message) {
     height: height || 1080,
     zoom: zoom || 1
   });
-  
+
   console.log(`[Viewport] Updated for ${clientId}: ${width}x${height} at (${x}, ${y}), zoom: ${zoom}`);
 }
 
@@ -1038,9 +1026,9 @@ function handleViewportUpdate(clientId, message) {
 function handleGeoDraw(clientId, message) {
   const client = clients.get(clientId);
   if (!client) return;
-  
+
   console.log(`[GeoDraw] Received from ${clientId}:`, { drawType: message.drawType, lat: message.lat, lng: message.lng });
-  
+
   // Track geo path
   if (message.drawType === 'start') {
     client.currentGeoPath = {
@@ -1068,14 +1056,14 @@ function handleGeoDraw(clientId, message) {
     }
     client.currentGeoPath = null;
   }
-  
+
   // Broadcast to other clients
   const broadcastMessage = {
     type: 'remoteGeoDraw',
     clientId,
     ...message
   };
-  
+
   // For now, broadcast to all clients (could optimize with geo proximity later)
   let broadcastCount = 0;
   clients.forEach((targetClient, targetId) => {
@@ -1085,7 +1073,7 @@ function handleGeoDraw(clientId, message) {
       targetClient.ws.send(JSON.stringify(broadcastMessage));
     }
   });
-  
+
   console.log(`[GeoDraw] Broadcasted to ${broadcastCount} clients`);
 }
 
@@ -1093,10 +1081,10 @@ function handleGeoDraw(clientId, message) {
 function handleSetLocation(clientId, message) {
   const client = clients.get(clientId);
   if (!client || !message.location) return;
-  
+
   client.location = message.location;
   console.log(`[Location] Client ${clientId} at ${message.location.lat}, ${message.location.lng}`);
-  
+
   // Broadcast artist location for world map
   const locationUpdate = {
     type: 'artistLocation',
@@ -1105,7 +1093,7 @@ function handleSetLocation(clientId, message) {
     lng: message.location.lng,
     active: true
   };
-  
+
   clients.forEach((targetClient, targetId) => {
     if (targetClient.ws.readyState === 1) {
       targetClient.ws.send(JSON.stringify(locationUpdate));
@@ -1117,10 +1105,10 @@ function handleSetLocation(clientId, message) {
 function handleGeoViewportUpdate(clientId, message) {
   const client = clients.get(clientId);
   if (!client || !message.viewport) return;
-  
+
   client.geoViewport = message.viewport;
   console.log(`[GeoViewport] Updated for ${clientId}:`, message.viewport.bounds);
-  
+
   // Load drawings for the new viewport
   loadGeoDrawingsForClient(clientId, message.viewport.bounds);
 }
@@ -1129,14 +1117,14 @@ function handleGeoViewportUpdate(clientId, message) {
 async function loadGeoDrawingsForClient(clientId, bounds) {
   const client = clients.get(clientId);
   if (!client) return;
-  
+
   console.log(`[LoadGeoDrawings] Loading drawings for ${clientId} in bounds:`, bounds);
-  
+
   try {
     const drawings = await geoDrawingPersistence.loadGeoDrawings(bounds, 500);
-    
+
     console.log(`[LoadGeoDrawings] Found ${drawings.length} drawings`);
-    
+
     // If no drawings, send empty response
     if (drawings.length === 0) {
       client.ws.send(JSON.stringify({
@@ -1147,19 +1135,19 @@ async function loadGeoDrawingsForClient(clientId, bounds) {
       }));
       return;
     }
-    
+
     // Send in batches
     const batchSize = 50;
     for (let i = 0; i < drawings.length; i += batchSize) {
       const batch = drawings.slice(i, i + batchSize);
-      
+
       client.ws.send(JSON.stringify({
         type: 'geoDrawingHistory',
         drawings: batch,
         batchIndex: Math.floor(i / batchSize),
         totalBatches: Math.ceil(drawings.length / batchSize)
       }));
-      
+
       if (i + batchSize < drawings.length) {
         await new Promise(resolve => setTimeout(resolve, 10));
       }
@@ -1173,12 +1161,12 @@ async function loadGeoDrawingsForClient(clientId, bounds) {
 async function handleRequestWorldArtwork(clientId, message) {
   const client = clients.get(clientId);
   if (!client) return;
-  
+
   try {
     // Get heatmap data
     const hotspots = await geoDrawingPersistence.getWorldHeatmap();
     const stats = await geoDrawingPersistence.getGlobalStats();
-    
+
     client.ws.send(JSON.stringify({
       type: 'worldArtworkData',
       hotspots,
@@ -1197,7 +1185,7 @@ async function handleRequestWorldArtwork(clientId, message) {
 async function handleCreateActivity(clientId, message) {
   const client = clients.get(clientId);
   if (!client) return;
-  
+
   try {
     // Check if user is at the location (within 500m)
     if (client.location) {
@@ -1207,7 +1195,7 @@ async function handleCreateActivity(clientId, message) {
         message.lat,
         message.lng
       );
-      
+
       if (!canCreate) {
         console.log(`[Activity] User ${clientId} not close enough to create activity at ${message.lat}, ${message.lng}`);
         client.ws.send(JSON.stringify({
@@ -1217,9 +1205,9 @@ async function handleCreateActivity(clientId, message) {
         return;
       }
     }
-    
+
     console.log(`[CreateActivity] Creating activity with owner hash: ${client.userHash}`);
-    
+
     const activity = await activityPersistence.createActivity({
       title: message.title,
       description: message.description,
@@ -1232,18 +1220,18 @@ async function handleCreateActivity(clientId, message) {
       creatorId: clientId,
       creatorName: client.username
     });
-    
+
     console.log(`[Activity] Created: ${activity.id} at ${activity.street} by owner ${client.userHash} (client: ${clientId}`);
-    
+
     // Join the creator to their activity
     client.currentActivity = activity.id;
-    
+
     client.ws.send(JSON.stringify({
       type: 'activityCreated',
       activity,
       isOwnCreation: true
     }));
-    
+
     // Notify others in the area about the new activity
     clients.forEach((targetClient, targetId) => {
       if (targetId !== clientId && targetClient.ws.readyState === 1 && targetClient.geoViewport) {
@@ -1269,15 +1257,15 @@ async function handleCreateActivity(clientId, message) {
 async function handleGetActivities(clientId, message) {
   const client = clients.get(clientId);
   if (!client || !message.bounds) return;
-  
+
   try {
     const zoom = message.zoom || 15;
     console.log(`[GetActivities] Client ${clientId} requesting activities at zoom ${zoom}`);
-    
+
     if (zoom >= 17) { // Street level - show individual activities
       const activities = await activityPersistence.getActivitiesInBounds(message.bounds);
       console.log(`[GetActivities] Found ${activities.length} activities at street level`);
-      
+
       client.ws.send(JSON.stringify({
         type: 'activities',
         activities,
@@ -1287,7 +1275,7 @@ async function handleGetActivities(clientId, message) {
       const streetActivities = await activityPersistence.getStreetActivities(message.bounds);
       const streetCount = Object.keys(streetActivities).length;
       console.log(`[GetActivities] Found ${streetCount} streets with activities`);
-      
+
       client.ws.send(JSON.stringify({
         type: 'activities',
         streetActivities,
@@ -1302,77 +1290,77 @@ async function handleGetActivities(clientId, message) {
 async function handleJoinActivity(clientId, message) {
   const client = clients.get(clientId);
   if (!client || !message.activityId) return;
-  
+
   // Leave current activity if any
   if (client.currentActivity) {
     handleLeaveActivity(clientId, { activityId: client.currentActivity });
   }
-  
+
   client.currentActivity = message.activityId;
   console.log(`[JoinActivity] ${clientId} joining activity ${message.activityId}`);
-  
+
   // Load canvas data for the activity
   const canvasData = await activityPersistence.loadActivityCanvas(message.activityId);
-  
+
   // Also load activity data to get permissions/requests
   const activity = await activityPersistence.getActivity(message.activityId);
-  
+
   client.ws.send(JSON.stringify({
     type: 'activityJoined',
     activityId: message.activityId,
     canvasData: canvasData || { paths: [] },
     activity: activity
   }));
-  
+
   // Update participant count
   const participants = getActivityParticipants(message.activityId);
   console.log(`[JoinActivity] Activity ${message.activityId} now has ${participants.size} participants`);
-  
+
   await activityPersistence.updateActivityStats(message.activityId, {
     participantCount: participants.size
   });
-  
+
   // Notify other participants
   broadcastToActivity(message.activityId, {
     type: 'participantJoined',
     clientId,
     username: client.username
   }, clientId);
-  
+
   console.log(`[Activity] ${clientId} joined activity ${message.activityId} with ${participants.size - 1} other participants`);
 }
 
 function handleLeaveActivity(clientId, message) {
   const client = clients.get(clientId);
   if (!client) return;
-  
+
   const activityId = message.activityId || client.currentActivity;
   if (!activityId) return;
-  
+
   client.currentActivity = null;
-  
+
   // Notify other participants
   broadcastToActivity(activityId, {
     type: 'participantLeft',
     clientId,
     username: client.username
   }, clientId);
-  
+
   // Update participant count
   const participants = getActivityParticipants(activityId);
   activityPersistence.updateActivityStats(activityId, {
     participantCount: participants.size
   }).catch(err => console.error('Failed to update participant count:', err));
-  
+
   console.log(`[Activity] ${clientId} left activity ${activityId}`);
 }
 
 async function handleActivityDraw(clientId, message) {
   const client = clients.get(clientId);
   if (!client || !client.currentActivity) return;
-  
+
   const activityId = client.currentActivity;
-  
+
   // Check if user can contribute
   const canContribute = await activityPersistence.canUserContribute(activityId, client.userHash);
   if (!canContribute) {
@@ -1383,9 +1371,9 @@ async function handleActivityDraw(clientId, message) {
     }));
     return;
   }
-  
+
   console.log(`[ActivityDraw] ${clientId} drawing in activity ${activityId}, type: ${message.drawType}`);
-  
+
   // Track drawing path
   if (message.drawType === 'start') {
     client.currentActivityPath = {
@@ -1402,7 +1390,7 @@ async function handleActivityDraw(clientId, message) {
     if (client.currentActivityPath && client.currentActivityPath.points.length > 1) {
       // Load existing canvas data
       let canvasData = await activityPersistence.loadActivityCanvas(activityId) || { paths: [] };
-      
+
       // Add new path with unique ID
       canvasData.paths.push({
         ...client.currentActivityPath,
@@ -1411,17 +1399,17 @@ async function handleActivityDraw(clientId, message) {
         userHash: client.userHash, // Store user hash with path
         timestamp: Date.now()
       });
-      
+
       // Save updated canvas
       await activityPersistence.saveActivityCanvas(activityId, canvasData);
     }
     client.currentActivityPath = null;
   }
-  
+
   // Get participants for logging
   const participants = getActivityParticipants(activityId);
   console.log(`[ActivityDraw] Broadcasting to ${participants.size - 1} other participants in activity ${activityId}`);
-  
+
   // Broadcast to other participants
   // Remove the 'type' field from message to avoid overwriting
   const { type, ...drawData } = message;
@@ -1447,7 +1435,7 @@ function getActivityParticipants(activityId) {
 function broadcastToActivity(activityId, message, excludeId = null) {
   const participants = getActivityParticipants(activityId);
   console.log(`[BroadcastActivity] Sending ${message.type} to ${participants.size - 1} participants in activity ${activityId}`);
-  
+
   let sentCount = 0;
   participants.forEach(participantId => {
     if (participantId !== excludeId) {
@@ -1462,7 +1450,7 @@ function broadcastToActivity(activityId, message, excludeId = null) {
       console.log(`[BroadcastActivity] Skipping sender ${participantId}`);
     }
   });
-  
+
   if (sentCount === 0) {
     console.log(`[BroadcastActivity] WARNING: No participants received the message (activity: ${activityId})`);
   }
@@ -1488,11 +1476,11 @@ function broadcastActivityUpdate(activity) {
 async function handleGetMyActivities(clientId, message) {
   const client = clients.get(clientId);
   if (!client) return;
-  
+
   try {
     const activities = await activityPersistence.getActivitiesByOwner(client.userHash);
     console.log(`[MyActivities] Found ${activities.length} activities for owner ${client.userHash}`);
-    
+
     client.ws.send(JSON.stringify({
       type: 'myActivities',
       activities
@@ -1510,7 +1498,7 @@ async function handleGetMyActivities(clientId, message) {
 async function handleUpdateActivityPermissions(clientId, message) {
   const client = clients.get(clientId);
   if (!client || !message.activityId) return;
-  
+
   try {
     // Load activity to check ownership
     const activityKey = `activity:${message.activityId}`;
@@ -1522,7 +1510,7 @@ async function handleUpdateActivityPermissions(clientId, message) {
       }));
       return;
     }
-    
+
     const activity = JSON.parse(activityData);
     if (activity.ownerId !== client.userHash) {
       client.ws.send(JSON.stringify({
@@ -1531,18 +1519,18 @@ async function handleUpdateActivityPermissions(clientId, message) {
       }));
       return;
     }
-    
+
     // Update permissions
     await activityPersistence.updateActivityPermissions(message.activityId, message.permissions);
-    
+
     console.log(`[Permissions] Updated permissions for activity ${message.activityId}`);
-    
+
     client.ws.send(JSON.stringify({
       type: 'permissionsUpdated',
       activityId: message.activityId,
       permissions: message.permissions
     }));
-    
+
     // Notify participants of permission change
     broadcastToActivity(message.activityId, {
       type: 'activityPermissionsChanged',
@@ -1561,7 +1549,7 @@ async function handleUpdateActivityPermissions(clientId, message) {
 async function handleRemoveUserDrawing(clientId, message) {
   const client = clients.get(clientId);
   if (!client || !message.activityId || !message.pathId) return;
-  
+
   try {
     // Load activity to check ownership/moderation
     const activityKey = `activity:${message.activityId}`;
@@ -1573,13 +1561,13 @@ async function handleRemoveUserDrawing(clientId, message) {
       }));
       return;
     }
-    
+
     const activityData = JSON.parse(activityInfo);
-    
+
     // Check if user is owner or moderator
     const isOwner = activityData.ownerId === client.userHash;
     const isModerator = activityData.permissions?.moderators?.includes(client.userHash);
-    
+
     if (!isOwner && !isModerator) {
       client.ws.send(JSON.stringify({
         type: 'error',
@@ -1587,16 +1575,16 @@ async function handleRemoveUserDrawing(clientId, message) {
       }));
       return;
     }
-    
+
     // Load canvas and remove the path
     const canvasData = await activityPersistence.loadActivityCanvas(message.activityId);
     if (canvasData && canvasData.paths) {
       canvasData.paths = canvasData.paths.filter(path => path.pathId !== message.pathId);
       await activityPersistence.saveActivityCanvas(message.activityId, canvasData);
     }
-    
+
     console.log(`[RemoveDraw] Removed drawing ${message.pathId} from activity ${message.activityId}`);
-    
+
     // Broadcast removal to all participants
     broadcastToActivity(message.activityId, {
       type: 'drawingRemoved',
@@ -1615,19 +1603,19 @@ async function handleRemoveUserDrawing(clientId, message) {
 async function handleAuthenticate(clientId, message) {
   const client = clients.get(clientId);
   if (!client || !message.userHash) return;
-  
+
   try {
     // Verify the hash exists in our system
     const exists = await userIdentityManager.userHashExists(message.userHash);
-    
+
     if (exists) {
       // Update client with the authenticated hash
       client.userHash = message.userHash;
       console.log(`[Auth] Client ${clientId} authenticated with existing hash: ${message.userHash}`);
-      
+
       // Update user identity last seen
       await userIdentityManager.getUserIdentity(message.userHash);
-      
+
       // Re-send welcome with the authenticated hash
       client.ws.send(JSON.stringify({
         type: 'welcome',
@@ -1647,12 +1635,12 @@ async function handleAuthenticate(clientId, message) {
 async function handleRequestContribution(clientId, message) {
   const client = clients.get(clientId);
   if (!client || !message.activityId) return;
-  
+
   try {
     // Load activity
     const activity = await activityPersistence.getActivity(message.activityId);
     if (!activity) return;
-    
+
     // Check if user is already approved or banned
     if (activity.permissions?.approvedContributors?.includes(client.userHash)) {
       client.ws.send(JSON.stringify({
@@ -1661,7 +1649,7 @@ async function handleRequestContribution(clientId, message) {
       }));
       return;
     }
-    
+
     if (activity.permissions?.bannedUsers?.includes(client.userHash)) {
       client.ws.send(JSON.stringify({
         type: 'contributionStatus',
@@ -1669,30 +1657,30 @@ async function handleRequestContribution(clientId, message) {
       }));
       return;
     }
-    
+
     // Add to requests if not already there
     if (!activity.permissions.contributorRequests) {
       activity.permissions.contributorRequests = [];
     }
-    
+
     const existingRequest = activity.permissions.contributorRequests.find(
       req => req.userHash === client.userHash
     );
-    
+
     if (!existingRequest) {
       activity.permissions.contributorRequests.push({
         userHash: client.userHash,
         clientId: clientId,
         timestamp: Date.now()
       });
-      
+
       // Update activity
       await activityPersistence.updateActivity(message.activityId, activity);
-      
+
       // Notify the owner
       const ownerClients = Array.from(clients.entries())
         .filter(([_, c]) => c.userHash === activity.ownerId);
-      
+
       ownerClients.forEach(([_, ownerClient]) => {
         ownerClient.ws.send(JSON.stringify({
           type: 'contributionRequest',
@@ -1705,12 +1693,12 @@ async function handleRequestContribution(clientId, message) {
         }));
       });
     }
-    
+
     client.ws.send(JSON.stringify({
       type: 'contributionStatus',
       status: 'requested'
     }));
-    
+
   } catch (error) {
     console.error('Failed to handle contribution request:', error);
   }
@@ -1720,12 +1708,12 @@ async function handleRequestContribution(clientId, message) {
 async function handleApproveContributor(clientId, message) {
   const client = clients.get(clientId);
   if (!client || !message.activityId || !message.userHash) return;
-  
+
   try {
     // Load activity
     const activity = await activityPersistence.getActivity(message.activityId);
     if (!activity) return;
-    
+
     // Check if user is owner
     if (activity.ownerId !== client.userHash) {
       client.ws.send(JSON.stringify({
@@ -1734,30 +1722,30 @@ async function handleApproveContributor(clientId, message) {
       }));
       return;
     }
-    
+
     // Add to approved contributors
     if (!activity.permissions.approvedContributors) {
       activity.permissions.approvedContributors = [];
     }
-    
+
     if (!activity.permissions.approvedContributors.includes(message.userHash)) {
       activity.permissions.approvedContributors.push(message.userHash);
     }
-    
+
     // Remove from requests
     if (activity.permissions.contributorRequests) {
       activity.permissions.contributorRequests = activity.permissions.contributorRequests.filter(
         req => req.userHash !== message.userHash
       );
     }
-    
+
     // Update activity
     await activityPersistence.updateActivity(message.activityId, activity);
-    
+
     // Notify the approved user
     const approvedClients = Array.from(clients.entries())
       .filter(([_, c]) => c.userHash === message.userHash);
-    
+
     approvedClients.forEach(([_, approvedClient]) => {
       approvedClient.ws.send(JSON.stringify({
         type: 'contributionStatus',
@@ -1765,13 +1753,13 @@ async function handleApproveContributor(clientId, message) {
         activityId: message.activityId
       }));
     });
-    
+
     // Broadcast to all participants
     broadcastToActivity(message.activityId, {
       type: 'activityUpdate',
       activity: activity
     });
-    
+
   } catch (error) {
     console.error('Failed to approve contributor:', error);
   }
@@ -1781,12 +1769,12 @@ async function handleApproveContributor(clientId, message) {
 async function handleGetAllActivities(clientId, message) {
   const client = clients.get(clientId);
   if (!client) return;
-  
+
   try {
     // Get all activities without bounds restriction
     const activities = await activityPersistence.getAllActivities();
     console.log(`[AllActivities] Found ${activities.length} total activities`);
-    
+
     client.ws.send(JSON.stringify({
       type: 'allActivities',
       activities
@@ -1804,20 +1792,20 @@ async function handleGetAllActivities(clientId, message) {
 async function handleDeleteAllActivities(clientId, message) {
   const client = clients.get(clientId);
   if (!client) return;
-  
+
   try {
     // Get all activities
     const activities = await activityPersistence.getAllActivities();
     console.log(`[DeleteAllActivities] Deleting ${activities.length} activities`);
-    
+
     let deletedCount = 0;
-    
+
     // Delete each activity
     for (const activity of activities) {
       const deleted = await activityPersistence.deleteActivity(activity.id, activity.ownerId);
       if (deleted) {
         deletedCount++;
-        
+
         // Broadcast deletion to all clients
         clients.forEach((targetClient) => {
           if (targetClient.ws.readyState === 1) {
@@ -1827,7 +1815,7 @@ async function handleDeleteAllActivities(clientId, message) {
             }));
           }
         });
-        
+
         // Kick out any users currently in this activity
         clients.forEach((targetClient) => {
           if (targetClient.currentActivity === activity.id) {
@@ -1836,14 +1824,14 @@ async function handleDeleteAllActivities(clientId, message) {
         });
       }
     }
-    
+
     console.log(`[DeleteAllActivities] Successfully deleted ${deletedCount} activities`);
-    
+
     client.ws.send(JSON.stringify({
       type: 'allActivitiesDeleted',
       count: deletedCount
     }));
-    
+
   } catch (error) {
     console.error('Failed to delete all activities:', error);
     client.ws.send(JSON.stringify({
@@ -1857,20 +1845,20 @@ async function handleDeleteAllActivities(clientId, message) {
 async function handleDeleteActivity(clientId, message) {
   const client = clients.get(clientId);
   if (!client || !message.activityId) return;
-  
+
   try {
     // Attempt to delete the activity
     const deleted = await activityPersistence.deleteActivity(message.activityId, client.userHash);
-    
+
     if (deleted) {
       console.log(`[DeleteActivity] Activity ${message.activityId} deleted by owner ${client.userHash}`);
-      
+
       // Notify the client of successful deletion
       client.ws.send(JSON.stringify({
         type: 'activityDeleted',
         activityId: message.activityId
       }));
-      
+
       // Broadcast deletion to all clients in the area
       clients.forEach((targetClient) => {
         if (targetClient.ws.readyState === 1 && targetClient.geoViewport) {
@@ -1880,7 +1868,7 @@ async function handleDeleteActivity(clientId, message) {
           }));
         }
       });
-      
+
       // Kick out any users currently in this activity
       clients.forEach((targetClient) => {
         if (targetClient.currentActivity === message.activityId) {
@@ -1907,19 +1895,166 @@ async function handleDeleteActivity(clientId, message) {
   }
 }
 
+// Fabric.js Canvas Handlers
+async function handleFabricObjectAdded(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client || !client.currentActivity) return;
+
+  const activityId = client.currentActivity;
+
+  // Check if user can contribute
+  const canContribute = await activityPersistence.canUserContribute(activityId, client.userHash);
+  if (!canContribute) {
+    console.log(`[FabricObjectAdded] User ${client.userHash} not allowed to draw in activity ${activityId}`);
+    return;
+  }
+
+  console.log(`[FabricObjectAdded] ${clientId} added object in activity ${activityId}`);
+
+  try {
+    // Load existing canvas data
+    let canvasData = await activityPersistence.loadActivityCanvas(activityId) || { objects: [] };
+
+    // Ensure objects array exists
+    if (!canvasData.objects) {
+      canvasData.objects = [];
+    }
+
+    // Add new object
+    canvasData.objects.push({
+      ...message.object,
+      userId: client.userHash,
+      userName: client.userName || 'Anonymous',
+      timestamp: Date.now()
+    });
+
+    // Save updated canvas
+    await activityPersistence.saveActivityCanvas(activityId, canvasData);
+
+    // Broadcast to other participants
+    broadcastToActivity(activityId, {
+      type: 'fabricObjectAdded',
+      object: message.object,
+      userHash: client.userHash,
+      userName: client.userName || 'Anonymous'
+    }, clientId);
+  } catch (error) {
+    console.error('[FabricObjectAdded] Error:', error);
+  }
+}
+
+async function handleFabricObjectModified(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client || !client.currentActivity) return;
+
+  const activityId = client.currentActivity;
+
+  // Check if user can contribute
+  const canContribute = await activityPersistence.canUserContribute(activityId, client.userHash);
+  if (!canContribute) {
+    console.log(`[FabricObjectModified] User ${client.userHash} not allowed to modify in activity ${activityId}`);
+    return;
+  }
+
+  console.log(`[FabricObjectModified] ${clientId} modified object ${message.objectId} in activity ${activityId}`);
+
+  try {
+    // Load existing canvas data
+    let canvasData = await activityPersistence.loadActivityCanvas(activityId) || { objects: [] };
+
+    // Find and update the object
+    const objectIndex = canvasData.objects?.findIndex(obj => obj.id === message.objectId);
+    if (objectIndex !== -1) {
+      canvasData.objects[objectIndex] = {
+        ...canvasData.objects[objectIndex],
+        ...message.object,
+        timestamp: Date.now()
+      };
+
+      // Save updated canvas
+      await activityPersistence.saveActivityCanvas(activityId, canvasData);
+    }
+
+    // Broadcast to other participants
+    broadcastToActivity(activityId, {
+      type: 'fabricObjectModified',
+      objectId: message.objectId,
+      object: message.object,
+      userHash: client.userHash
+    }, clientId);
+  } catch (error) {
+    console.error('[FabricObjectModified] Error:', error);
+  }
+}
+
+async function handleFabricObjectRemoved(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client || !client.currentActivity) return;
+
+  const activityId = client.currentActivity;
+
+  // Check if user can contribute
+  const canContribute = await activityPersistence.canUserContribute(activityId, client.userHash);
+  if (!canContribute) {
+    console.log(`[FabricObjectRemoved] User ${client.userHash} not allowed to remove in activity ${activityId}`);
+    return;
+  }
+
+  console.log(`[FabricObjectRemoved] ${clientId} removed object ${message.objectId} in activity ${activityId}`);
+
+  try {
+    // Load existing canvas data
+    let canvasData = await activityPersistence.loadActivityCanvas(activityId) || { objects: [] };
+
+    // Remove the object
+    if (canvasData.objects) {
+      canvasData.objects = canvasData.objects.filter(obj => obj.id !== message.objectId);
+
+      // Save updated canvas
+      await activityPersistence.saveActivityCanvas(activityId, canvasData);
+    }
+
+    // Broadcast to other participants
+    broadcastToActivity(activityId, {
+      type: 'fabricObjectRemoved',
+      objectId: message.objectId,
+      userHash: client.userHash
+    }, clientId);
+  } catch (error) {
+    console.error('[FabricObjectRemoved] Error:', error);
+  }
+}
+
+function handleFabricCursor(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client || !client.currentActivity) return;
+
+  const activityId = client.currentActivity;
+
+  // Broadcast cursor position to other participants (no need to save)
+  broadcastToActivity(activityId, {
+    type: 'fabricCursor',
+    x: message.x,
+    y: message.y,
+    userHash: client.userHash,
+    userName: client.userName || 'Anonymous',
+    color: message.color
+  }, clientId);
+}
+
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, closing server...');
-  
+
   clearInterval(heartbeatInterval);
-  
+
   // Shutdown connection manager
   await connectionManager.shutdown();
-  
+
   wss.clients.forEach((ws) => {
     ws.close();
   });
-  
+
   server.close(() => {
     if (redis) redis.quit();
     process.exit(0);
