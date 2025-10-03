@@ -179,7 +179,7 @@ export function ActivityControls(props) {
                 transition: 'all 0.2s'
               }}
             >
-              {props.selectMode ? '✕ Cancel Selection' : '🗑️ Remove Drawings'}
+              {props.selectMode ? '✕ Cancel Review' : '🎨 Review Contributions'}
             </button>
             
             <Show when={props.selectMode}>
@@ -190,10 +190,10 @@ export function ActivityControls(props) {
                 'border-radius': '6px'
               }}>
                 <div style={{ 'font-size': '11px', 'margin-bottom': '8px' }}>
-                  Click on drawings to select them for removal
+                  Click on contributors' drawings to review
                 </div>
                 <div style={{ 'font-size': '12px', 'margin-bottom': '8px' }}>
-                  Selected: {props.selectedPaths?.size || 0} drawing{props.selectedPaths?.size !== 1 ? 's' : ''}
+                  Selected: {props.selectedPaths?.size || 0} contribution{props.selectedPaths?.size !== 1 ? 's' : ''}
                 </div>
                 <button
                   onClick={props.onRemoveSelected}

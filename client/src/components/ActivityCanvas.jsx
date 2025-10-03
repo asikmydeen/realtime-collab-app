@@ -15,6 +15,8 @@ export function ActivityCanvas(props) {
   const [selectedPaths, setSelectedPaths] = createSignal(new Set());
   const [hoveredPath, setHoveredPath] = createSignal(null);
   const [canContribute, setCanContribute] = createSignal(false);
+  const [requestSent, setRequestSent] = createSignal(false);
+  const [contributionRequests, setContributionRequests] = createSignal([]);
   
   // Drawing state
   const drawingThrottle = {
@@ -107,6 +109,8 @@ export function ActivityCanvas(props) {
   }
   
   function renderDrawings(ctx) {
+    const isOwner = props.wsManager?.userHash === props.activity?.ownerId;
+    
     // Render all completed paths
     paths().forEach(path => {
       if (path.points && path.points.length > 0) {
@@ -116,11 +120,19 @@ export function ActivityCanvas(props) {
         if (selectMode() && selectedPaths().has(path.pathId)) {
           ctx.strokeStyle = '#ef4444';
           ctx.lineWidth = (path.size || 3) + 2;
-        } else if (selectMode() && path.userHash !== props.wsManager?.userHash) {
-          // In select mode, make other users' drawings more visible
-          ctx.strokeStyle = path.color || '#000000';
-          ctx.lineWidth = path.size || 3;
-          ctx.globalAlpha = 0.5;
+        } else if (selectMode() && isOwner) {
+          // In owner select mode, distinguish between own drawings and others'
+          if (path.userHash === props.wsManager?.userHash) {
+            // Owner's own drawings
+            ctx.strokeStyle = path.color || '#000000';
+            ctx.lineWidth = path.size || 3;
+            ctx.globalAlpha = 0.3;
+          } else {
+            // Others' drawings - make more visible for review
+            ctx.strokeStyle = path.color || '#000000';
+            ctx.lineWidth = path.size || 3;
+            ctx.globalAlpha = 1;
+          }
         } else {
           ctx.strokeStyle = path.color || '#000000';
           ctx.lineWidth = path.size || 3;
@@ -189,6 +201,12 @@ export function ActivityCanvas(props) {
   
   createEffect(() => {
     updateContributeStatus();
+    
+    // Load contribution requests if owner
+    if (props.activity && props.wsManager?.userHash === props.activity.ownerId) {
+      const requests = props.activity.permissions?.contributorRequests || [];
+      setContributionRequests(requests);
+    }
   });
   
   // Mouse handlers
@@ -200,10 +218,15 @@ export function ActivityCanvas(props) {
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
         
+        // Only owners can select drawings
+        const isOwner = props.wsManager?.userHash === props.activity?.ownerId;
+        if (!isOwner) return;
+        
         // Find path under click (check in reverse order for top-most path)
         for (let i = paths().length - 1; i >= 0; i--) {
           const path = paths()[i];
-          if (path.userHash === props.wsManager?.userHash) continue; // Can't select own paths
+          // Owners can only select others' paths, not their own
+          if (path.userHash === props.wsManager?.userHash) continue;
           
           if (isPointNearPath(x, y, path)) {
             setSelectedPaths(prev => {
@@ -252,6 +275,10 @@ export function ActivityCanvas(props) {
   
   function handleMouseMove(e) {
     if (selectMode() && !isDrawing()) {
+      // Only owners can hover/select in review mode
+      const isOwner = props.wsManager?.userHash === props.activity?.ownerId;
+      if (!isOwner) return;
+      
       // In select mode, track which path is under the mouse
       const rect = canvasRef.getBoundingClientRect();
       const x = e.clientX - rect.left;
@@ -260,6 +287,7 @@ export function ActivityCanvas(props) {
       let foundPath = null;
       for (let i = paths().length - 1; i >= 0; i--) {
         const path = paths()[i];
+        // Only show others' contributions for review
         if (path.userHash === props.wsManager?.userHash) continue;
         
         if (isPointNearPath(x, y, path)) {
@@ -509,6 +537,14 @@ export function ActivityCanvas(props) {
         updateContributeStatus();
       });
       
+      // Handle contribution requests (for owners)
+      const cleanup10 = props.wsManager.on('contributionRequest', (data) => {
+        console.log('[ActivityCanvas] Received contribution request:', data);
+        if (data.activityId === props.activity?.id && props.wsManager?.userHash === props.activity?.ownerId) {
+          setContributionRequests(prev => [...prev, data.requester]);
+        }
+      });
+      
       onCleanup(() => {
         cleanup1();
         cleanup2();
@@ -519,6 +555,7 @@ export function ActivityCanvas(props) {
         cleanup7();
         cleanup8();
         cleanup9();
+        cleanup10();
         if (drawingThrottle.timeoutId) {
           clearTimeout(drawingThrottle.timeoutId);
         }
@@ -626,7 +663,7 @@ export function ActivityCanvas(props) {
         </button>
         
         {/* Drawing Author Overlay */}
-        <Show when={selectMode() && hoveredPath()}>
+        <Show when={selectMode() && hoveredPath() && props.wsManager?.userHash === props.activity?.ownerId}>
           <div style={{
             position: 'absolute',
             bottom: '20px',
@@ -634,20 +671,36 @@ export function ActivityCanvas(props) {
             transform: 'translateX(-50%)',
             background: 'rgba(0, 0, 0, 0.9)',
             color: 'white',
-            padding: '10px 20px',
-            'border-radius': '20px',
+            padding: '15px 25px',
+            'border-radius': '25px',
             'font-size': '14px',
             'backdrop-filter': 'blur(10px)',
             display: 'flex',
             'align-items': 'center',
-            gap: '10px'
+            gap: '15px',
+            'box-shadow': '0 4px 20px rgba(0, 0, 0, 0.5)'
           }}>
-            <span>✏️ Drawn by:</span>
-            <span style={{ 'font-weight': 'bold' }}>
+            <span>✏️ Contribution by:</span>
+            <span style={{ 'font-weight': 'bold', color: '#60a5fa' }}>
               {hoveredPath().clientId ? `User ${hoveredPath().clientId.slice(-4)}` : 'Unknown'}
             </span>
-            {selectedPaths().has(hoveredPath().pathId) && (
-              <span style={{ color: '#ef4444' }}>(Selected for removal)</span>
+            {selectedPaths().has(hoveredPath().pathId) ? (
+              <span style={{ 
+                color: '#ef4444',
+                'font-weight': 'bold',
+                padding: '2px 8px',
+                background: 'rgba(239, 68, 68, 0.2)',
+                'border-radius': '12px'
+              }}>
+                ✓ Selected for removal
+              </span>
+            ) : (
+              <span style={{ 
+                color: '#6b7280',
+                'font-size': '12px'
+              }}>
+                Click to select
+              </span>
             )}
           </div>
         </Show>
@@ -669,34 +722,131 @@ export function ActivityCanvas(props) {
             <div style={{ 'margin-bottom': '10px' }}>
               🔒 This canvas is view-only
             </div>
-            <button
-              onClick={() => {
-                if (props.wsManager) {
-                  props.wsManager.send({
-                    type: 'requestContribution',
-                    activityId: props.activity.id
-                  });
-                }
-              }}
-              style={{
+            {requestSent() ? (
+              <div style={{
                 padding: '8px 20px',
-                background: '#3b82f6',
+                background: '#22c55e',
                 color: 'white',
-                border: 'none',
                 'border-radius': '20px',
-                'font-size': '14px',
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.background = '#2563eb';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.background = '#3b82f6';
-              }}
-            >
-              Request to Contribute
-            </button>
+                'font-size': '14px'
+              }}>
+                ✓ Request Sent - Waiting for approval
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  if (props.wsManager) {
+                    console.log('[ActivityCanvas] Sending contribution request');
+                    props.wsManager.send({
+                      type: 'requestContribution',
+                      activityId: props.activity.id
+                    });
+                    setRequestSent(true);
+                  }
+                }}
+                style={{
+                  padding: '8px 20px',
+                  background: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  'border-radius': '20px',
+                  'font-size': '14px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = '#2563eb';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = '#3b82f6';
+                }}
+              >
+                Request to Contribute
+              </button>
+            )}
+          </div>
+        </Show>
+        
+        {/* Owner Contribution Requests Panel */}
+        <Show when={props.wsManager?.userHash === props.activity?.ownerId && contributionRequests().length > 0}>
+          <div style={{
+            position: 'absolute',
+            top: '80px',
+            left: '20px',
+            background: 'rgba(0, 0, 0, 0.9)',
+            color: 'white',
+            padding: '15px',
+            'border-radius': '15px',
+            'backdrop-filter': 'blur(10px)',
+            'min-width': '250px',
+            'max-width': '350px'
+          }}>
+            <h4 style={{ margin: '0 0 10px 0', 'font-size': '16px' }}>
+              📋 Contribution Requests ({contributionRequests().length})
+            </h4>
+            <div style={{ 'max-height': '200px', 'overflow-y': 'auto' }}>
+              {contributionRequests().map(request => (
+                <div style={{
+                  display: 'flex',
+                  'align-items': 'center',
+                  'justify-content': 'space-between',
+                  padding: '8px',
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  'margin-bottom': '8px',
+                  'border-radius': '8px'
+                }}>
+                  <span style={{ 'font-size': '14px' }}>
+                    User {request.clientId?.slice(-4) || 'Unknown'}
+                  </span>
+                  <div style={{ display: 'flex', gap: '5px' }}>
+                    <button
+                      onClick={() => {
+                        if (props.wsManager) {
+                          props.wsManager.send({
+                            type: 'approveContributor',
+                            activityId: props.activity.id,
+                            userHash: request.userHash
+                          });
+                          setContributionRequests(prev =>
+                            prev.filter(r => r.userHash !== request.userHash)
+                          );
+                        }
+                      }}
+                      style={{
+                        padding: '4px 10px',
+                        background: '#22c55e',
+                        color: 'white',
+                        border: 'none',
+                        'border-radius': '4px',
+                        'font-size': '12px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ✓ Approve
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Remove from requests without approving
+                        setContributionRequests(prev =>
+                          prev.filter(r => r.userHash !== request.userHash)
+                        );
+                      }}
+                      style={{
+                        padding: '4px 10px',
+                        background: '#ef4444',
+                        color: 'white',
+                        border: 'none',
+                        'border-radius': '4px',
+                        'font-size': '12px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </Show>
         

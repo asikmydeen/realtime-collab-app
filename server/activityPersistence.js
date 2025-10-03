@@ -356,26 +356,35 @@ export class ActivityPersistence {
   
   // Get activities created by a specific owner
   async getActivitiesByOwner(ownerId) {
-    if (!this.redis || !ownerId) return [];
+    if (!this.redis || !ownerId) {
+      console.log('[getActivitiesByOwner] Missing redis or ownerId:', { redis: !!this.redis, ownerId });
+      return [];
+    }
     
     try {
       const activities = [];
       // We need to scan all activities to find ones by this owner
       // In production, you'd want an index for this
       const keys = await this.redis.keys(`${this.keyPrefix}*`);
+      console.log(`[getActivitiesByOwner] Found ${keys.length} total activity keys`);
       
       for (const key of keys) {
-        if (key.includes(':canvas:') || key.includes(':default:') || key.includes(':geo:') || key.includes(':street:')) continue;
+        // Skip canvas, default, geo, and street data keys
+        if (key.includes(':canvas:') || key.includes(':default:') || key.includes(':geo:') || key.includes(':street:')) {
+          continue;
+        }
         
         const activityData = await this.redis.get(key);
         if (activityData) {
           const activity = JSON.parse(activityData);
+          console.log(`[getActivitiesByOwner] Checking activity ${activity.id}, owner: ${activity.ownerId}, looking for: ${ownerId}`);
           if (activity.ownerId === ownerId) {
             activities.push(activity);
           }
         }
       }
       
+      console.log(`[getActivitiesByOwner] Found ${activities.length} activities for owner ${ownerId}`);
       // Sort by creation date, newest first
       activities.sort((a, b) => b.createdAt - a.createdAt);
       return activities;
