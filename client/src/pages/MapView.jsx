@@ -1,9 +1,10 @@
-import { Show } from 'solid-js';
+import { Show, createSignal } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { ActivityView } from '../components/ActivityView';
 
 export function MapView(props) {
   const navigate = useNavigate();
+  const [showSearch, setShowSearch] = createSignal(false);
   
   return (
     <>
@@ -19,55 +20,93 @@ export function MapView(props) {
         display: 'flex',
         'align-items': 'center',
         'justify-content': 'space-between',
-        padding: '0 20px',
+        padding: window.innerWidth <= 768 ? '0 10px' : '0 20px',
         'z-index': 1000,
         'box-shadow': '0 2px 20px rgba(0, 0, 0, 0.2)'
       }}>
-        <div style={{ display: 'flex', 'align-items': 'center', gap: '20px' }}>
-          <h1 style={{ 
-            margin: 0, 
-            'font-size': '18px', 
-            'font-weight': '600',
-            color: 'white',
-            display: 'flex',
-            'align-items': 'center',
-            gap: '8px'
-          }}>
-            <span style={{ 'font-size': '24px' }}>✨</span>
-            Infinite Canvas
-          </h1>
-          <div style={{ 
-            display: 'flex', 
-            gap: '15px',
-            color: 'rgba(255, 255, 255, 0.8)',
-            'font-size': '14px'
-          }}>
-            <span style={{ color: props.connected() ? '#4ade80' : '#ef4444' }}>
-              {props.connected() ? '🟢' : '🔴'} {props.connected() ? 'Live' : 'Offline'}
+        {/* Left side - App name */}
+        <h1 style={{ 
+          margin: 0, 
+          'font-size': window.innerWidth <= 768 ? '16px' : '18px', 
+          'font-weight': '600',
+          color: 'white',
+          display: 'flex',
+          'align-items': 'center',
+          gap: '6px',
+          'white-space': 'nowrap'
+        }}>
+          <span style={{ 'font-size': window.innerWidth <= 768 ? '20px' : '24px' }}>🌎</span>
+          <Show when={window.innerWidth > 480}>
+            World Art
+          </Show>
+        </h1>
+        
+        {/* Right side - Navigation buttons */}
+        <div style={{ display: 'flex', 'align-items': 'center', gap: window.innerWidth <= 768 ? '8px' : '12px' }}>
+          {/* Connection status - only on desktop */}
+          <Show when={window.innerWidth > 768}>
+            <span style={{ 
+              color: props.connected() ? '#4ade80' : '#ef4444',
+              'font-size': '14px'
+            }}>
+              {props.connected() ? '🟢' : '🔴'} {props.connected() ? 'Connected' : 'Offline'}
             </span>
-            <span>👥 {props.users().size} Artists</span>
-            <span>✏️ {props.operations()} Strokes</span>
-          </div>
+          </Show>
+          
+          {/* Search button - moved from ActivityView */}
+          <button
+            onClick={() => setShowSearch(!showSearch())}
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              color: 'white',
+              padding: window.innerWidth <= 768 ? '6px 10px' : '5px 12px',
+              'border-radius': '6px',
+              cursor: 'pointer',
+              'font-size': window.innerWidth <= 768 ? '12px' : '13px',
+              transition: 'all 0.2s',
+              display: 'flex',
+              'align-items': 'center',
+              gap: '6px'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = 'rgba(255, 255, 255, 0.1)';
+              e.target.style.borderColor = 'rgba(255, 255, 255, 0.5)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = 'transparent';
+              e.target.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+            }}
+          >
+            🔍 <Show when={window.innerWidth > 480}>Search</Show>
+          </button>
+          
+          {/* List View button */}
           <button
             onClick={() => navigate('/list')}
             style={{
               background: 'transparent',
               border: '1px solid rgba(255, 255, 255, 0.3)',
               color: 'white',
-              padding: '5px 10px',
+              padding: window.innerWidth <= 768 ? '6px 10px' : '5px 12px',
               'border-radius': '6px',
               cursor: 'pointer',
-              'font-size': '13px',
-              transition: 'all 0.2s'
+              'font-size': window.innerWidth <= 768 ? '12px' : '13px',
+              transition: 'all 0.2s',
+              display: 'flex',
+              'align-items': 'center',
+              gap: '6px'
             }}
             onMouseEnter={(e) => {
               e.target.style.background = 'rgba(255, 255, 255, 0.1)';
+              e.target.style.borderColor = 'rgba(255, 255, 255, 0.5)';
             }}
             onMouseLeave={(e) => {
               e.target.style.background = 'transparent';
+              e.target.style.borderColor = 'rgba(255, 255, 255, 0.3)';
             }}
           >
-            📋 List View
+            📋 <Show when={window.innerWidth > 480}>List</Show>
           </button>
         </div>
       </header>
@@ -88,6 +127,8 @@ export function MapView(props) {
           setBrushSize={props.setBrushSize}
           wsManager={props.wsManager()}
           connected={props.connected()}
+          showSearch={showSearch()}
+          setShowSearch={setShowSearch}
         />
       </div>
       

@@ -19,6 +19,7 @@ export function ActivityCanvas(props) {
   const [requestSent, setRequestSent] = createSignal(false);
   const [contributionRequests, setContributionRequests] = createSignal([]);
   const [showParticipants, setShowParticipants] = createSignal(false);
+  const [showMobileRequests, setShowMobileRequests] = createSignal(false);
   
   // Drawing state
   const drawingThrottle = {
@@ -833,28 +834,25 @@ export function ActivityCanvas(props) {
           {/* Mobile contribution requests notification */}
           <Show when={isMobile && props.wsManager?.userHash === props.activity?.ownerId && contributionRequests().length > 0}>
             <button
-              onClick={() => {
-                // Show mobile modal with requests
-                contributionRequests().forEach(request => {
-                  if (confirm(`Approve contribution request from User ${request.clientId?.slice(-4)}?`)) {
-                    props.wsManager.send({
-                      type: 'approveContributor',
-                      activityId: props.activity.id,
-                      userHash: request.userHash
-                    });
-                    setContributionRequests(prev =>
-                      prev.filter(r => r.userHash !== request.userHash)
-                    );
-                  }
-                });
-              }}
+              onClick={() => setShowMobileRequests(true)}
               style={{
                 ...modernStyles.participantsButton,
-                background: 'rgba(239, 68, 68, 0.8)'
+                background: 'rgba(239, 68, 68, 0.8)',
+                animation: 'pulse 2s infinite'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.background = 'rgba(239, 68, 68, 1)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = 'rgba(239, 68, 68, 0.8)';
               }}
             >
               📋
-              <span style={modernStyles.badge}>
+              <span style={{
+                ...modernStyles.badge,
+                background: '#fbbf24',
+                color: 'black'
+              }}>
                 {contributionRequests().length}
               </span>
             </button>
@@ -1364,6 +1362,135 @@ export function ActivityCanvas(props) {
         </div>
       </Show>
       
+      {/* Mobile Contribution Requests Modal */}
+      <Show when={showMobileRequests() && isMobile}>
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.7)',
+          'z-index': 300,
+          display: 'flex',
+          'align-items': 'flex-end'
+        }}>
+          <div style={{
+            width: '100%',
+            background: 'white',
+            'border-radius': '20px 20px 0 0',
+            padding: '20px',
+            'max-height': '70vh',
+            'overflow-y': 'auto',
+            animation: 'slideUp 0.3s ease-out'
+          }}>
+            <div style={{
+              display: 'flex',
+              'justify-content': 'space-between',
+              'align-items': 'center',
+              'margin-bottom': '20px'
+            }}>
+              <h3 style={{
+                margin: 0,
+                'font-size': '18px',
+                'font-weight': '600'
+              }}>
+                📋 Contribution Requests ({contributionRequests().length})
+              </h3>
+              <button
+                onClick={() => setShowMobileRequests(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  'font-size': '24px',
+                  cursor: 'pointer',
+                  padding: '5px'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div style={{ display: 'flex', 'flex-direction': 'column', gap: '12px' }}>
+              {contributionRequests().map(request => (
+                <div style={{
+                  background: '#f3f4f6',
+                  'border-radius': '12px',
+                  padding: '16px',
+                  display: 'flex',
+                  'align-items': 'center',
+                  'justify-content': 'space-between'
+                }}>
+                  <div>
+                    <div style={{
+                      'font-weight': '500',
+                      'font-size': '16px',
+                      'margin-bottom': '4px'
+                    }}>
+                      User {request.clientId?.slice(-4) || 'Unknown'}
+                    </div>
+                    <div style={{
+                      'font-size': '14px',
+                      color: '#6b7280'
+                    }}>
+                      Wants to contribute to this canvas
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      onClick={() => {
+                        props.wsManager.send({
+                          type: 'approveContributor',
+                          activityId: props.activity.id,
+                          userHash: request.userHash
+                        });
+                        setContributionRequests(prev =>
+                          prev.filter(r => r.userHash !== request.userHash)
+                        );
+                        if (contributionRequests().length === 1) {
+                          setShowMobileRequests(false);
+                        }
+                      }}
+                      style={{
+                        padding: '8px 16px',
+                        background: '#10B981',
+                        color: 'white',
+                        'border-radius': '8px',
+                        'font-size': '15px',
+                        'font-weight': '500',
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ✓ Approve
+                    </button>
+                    <button
+                      onClick={() => {
+                        setContributionRequests(prev =>
+                          prev.filter(r => r.userHash !== request.userHash)
+                        );
+                        if (contributionRequests().length === 1) {
+                          setShowMobileRequests(false);
+                        }
+                      }}
+                      style={{
+                        padding: '8px 16px',
+                        background: '#EF4444',
+                        color: 'white',
+                        'border-radius': '8px',
+                        'font-size': '15px',
+                        'font-weight': '500',
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ✗ Decline
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Show>
+      
       {/* Add CSS animations */}
       <style>{`
         @keyframes fadeIn {
@@ -1383,6 +1510,17 @@ export function ActivityCanvas(props) {
         @keyframes slideDown {
           from { transform: translateY(-20px); opacity: 0; }
           to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes pulse {
+          0% {
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+          }
+          70% {
+            box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+          }
         }
       `}</style>
     </div>

@@ -60,7 +60,6 @@ export function ActivityView(props) {
   const [tilesLoading, setTilesLoading] = createSignal(new Set());
   
   // Search
-  const [showSearch, setShowSearch] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal('');
   const [searchResults, setSearchResults] = createSignal([]);
   const [isSearching, setIsSearching] = createSignal(false);
@@ -85,10 +84,10 @@ export function ActivityView(props) {
         animateZoomToCenter();
       } else if (e.key === '/' || (e.ctrlKey && e.key === 'k')) {
         e.preventDefault();
-        setShowSearch(true);
+        if (props.setShowSearch) props.setShowSearch(true);
       } else if (e.key === 'Escape') {
-        if (showSearch()) {
-          setShowSearch(false);
+        if (props.showSearch) {
+          if (props.setShowSearch) props.setShowSearch(false);
           setSearchQuery('');
           setSearchResults([]);
         } else if (selectedActivity()) {
@@ -842,30 +841,10 @@ export function ActivityView(props) {
         transform: window.innerWidth <= 768 ? 'none' : 'translateX(-50%)',
         display: 'flex',
         'align-items': 'center',
-        'justify-content': window.innerWidth <= 768 ? 'space-between' : 'center',
+        'justify-content': 'center',
         gap: window.innerWidth <= 768 ? '10px' : '15px',
         'z-index': 100
       }}>
-        <button
-          onClick={() => setShowSearch(!showSearch())}
-          style={{
-            background: 'rgba(0, 0, 0, 0.8)',
-            color: 'white',
-            padding: window.innerWidth <= 768 ? '8px 12px' : '10px 15px',
-            'border-radius': '20px',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            'align-items': 'center',
-            gap: '8px',
-            'font-size': window.innerWidth <= 768 ? '12px' : '14px',
-            'backdrop-filter': 'blur(10px)',
-            'flex-shrink': 0
-          }}
-        >
-          🔍 Search Places
-        </button>
-        
         <div style={{
           background: 'rgba(0, 0, 0, 0.8)',
           color: 'white',
@@ -1189,7 +1168,7 @@ export function ActivityView(props) {
       
       
       {/* Search UI */}
-      <Show when={showSearch()}>
+      <Show when={props.showSearch}>
         <div style={{
           position: 'absolute',
           top: '80px',
@@ -1287,6 +1266,43 @@ export function ActivityView(props) {
               No results found
             </div>
           )}
+          
+          {/* Close button for search */}
+          <button
+            onClick={() => {
+              if (props.setShowSearch) props.setShowSearch(false);
+              setSearchQuery('');
+              setSearchResults([]);
+            }}
+            style={{
+              position: 'absolute',
+              top: '10px',
+              right: '10px',
+              background: 'rgba(255, 255, 255, 0.1)',
+              border: 'none',
+              'border-radius': '50%',
+              width: '32px',
+              height: '32px',
+              display: 'flex',
+              'align-items': 'center',
+              'justify-content': 'center',
+              color: 'rgba(255, 255, 255, 0.8)',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = 'rgba(239, 68, 68, 0.3)';
+              e.target.style.color = 'white';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = 'rgba(255, 255, 255, 0.1)';
+              e.target.style.color = 'rgba(255, 255, 255, 0.8)';
+            }}
+          >
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
         </div>
       </Show>
       
