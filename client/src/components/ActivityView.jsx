@@ -24,6 +24,12 @@ function generateArtisticName() {
   return `${adjective} ${noun}`;
 }
 
+// Helper function to check if a point is within bounds
+function isInBounds(lat, lng, bounds) {
+  return lat >= bounds.south && lat <= bounds.north &&
+         lng >= bounds.west && lng <= bounds.east;
+}
+
 export function ActivityView(props) {
   let mapCanvasRef;
   let tilesCanvasRef;
@@ -117,8 +123,8 @@ export function ActivityView(props) {
         
         updateViewport(lat, lng, mapZoom());
         
-        // Request default activity for this location
-        requestDefaultActivity(lat, lng, location);
+        // Request user's activities to open most recent one
+        requestUserActivities();
       } catch (error) {
         console.error('Failed to get location:', error);
         // Fallback to default location
@@ -128,8 +134,8 @@ export function ActivityView(props) {
         setLocationName('New York');
         updateViewport(defaultLat, defaultLng, mapZoom());
         
-        // Request default activity for fallback location
-        requestDefaultActivity(defaultLat, defaultLng, { city: 'New York' });
+        // Request user's activities even with fallback location
+        requestUserActivities();
       }
     }
   }
@@ -371,29 +377,23 @@ export function ActivityView(props) {
     }
   }
   
-  // Request default activity for a location
-  function requestDefaultActivity(lat, lng, locationInfo) {
+  // Request user's activities to open most recent one
+  function requestUserActivities() {
     if (!props.wsManager) {
       // If WebSocket not ready yet, try again in a bit
-      setTimeout(() => requestDefaultActivity(lat, lng, locationInfo), 500);
+      setTimeout(() => requestUserActivities(), 500);
       return;
     }
     
     // Check if connected
     if (!props.connected) {
       // If not connected yet, wait for connection
-      setTimeout(() => requestDefaultActivity(lat, lng, locationInfo), 500);
+      setTimeout(() => requestUserActivities(), 500);
       return;
     }
     
-    props.wsManager.send({
-      type: 'getDefaultActivity',
-      lat,
-      lng,
-      locationName: locationInfo?.city || locationInfo?.name || 'Local',
-      address: locationInfo?.displayName || '',
-      street: locationInfo?.street || locationInfo?.road || 'Community Area'
-    });
+    console.log('[ActivityView] Requesting user activities for auto-open');
+    props.wsManager.send({ type: 'getMyActivities' });
   }
   
   // Create new activity
@@ -688,29 +688,22 @@ export function ActivityView(props) {
         renderMap();
       });
       
-      const cleanup4 = props.wsManager.on('defaultActivity', (data) => {
-        console.log('[ActivityView] Received default activity:', data.activity);
-        
-        // Add default activity to the list
-        setActivities(prev => {
-          const existing = prev.find(a => a.id === data.activity.id);
-          if (!existing) {
-            return [...prev, data.activity];
-          }
-          return prev;
-        });
-        
-        // Automatically select the default activity
-        selectActivity(data.activity);
-        
-        // Also trigger activities request to populate the list
-        requestActivities();
-      });
+      // Remove default activity handler - no longer needed
       
+      let hasAutoOpenedCanvas = false;
       const cleanup5 = props.wsManager.on('myActivities', (data) => {
         console.log('[ActivityView] Received my activities:', data.activities?.length);
         setMyActivities(data.activities || []);
         setIsLoadingActivities(false); // Clear loading state
+        
+        // Auto-open most recent canvas on first load
+        if (!hasAutoOpenedCanvas && !selectedActivity() && data.activities && data.activities.length > 0) {
+          hasAutoOpenedCanvas = true;
+          // Sort by createdAt to get most recent
+          const mostRecent = data.activities.sort((a, b) => b.createdAt - a.createdAt)[0];
+          console.log('[ActivityView] Auto-opening most recent canvas:', mostRecent.title);
+          selectActivity(mostRecent);
+        }
       });
       
       const cleanup6 = props.wsManager.on('activityDeleted', (data) => {
