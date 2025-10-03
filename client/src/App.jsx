@@ -4,6 +4,7 @@ import { WebSocketManager } from './lib/websocket';
 import { WasmProcessor } from './lib/wasm';
 import { config } from './config';
 import { getUserColor, generateUsername, getContrastColor } from './utils/userColors';
+import { inject } from '@vercel/analytics';
 
 function App() {
   // State management
@@ -31,6 +32,9 @@ function App() {
   const [canvasAPI, setCanvasAPI] = createSignal(null);
   
   onMount(async () => {
+    // Initialize Vercel Analytics
+    inject();
+    
     // Initialize WebAssembly
     const wasm = new WasmProcessor();
     await wasm.init();
