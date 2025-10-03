@@ -972,21 +972,59 @@ export function ActivityView(props) {
                     e.target.style.borderColor = 'transparent';
                   }}
                 >
-                  {props.wsManager?.userHash === activity.ownerId && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '5px',
-                      right: '5px',
-                      background: '#fbbf24',
-                      color: 'black',
-                      padding: '2px 8px',
-                      'border-radius': '12px',
-                      'font-size': '10px',
-                      'font-weight': 'bold'
-                    }}>
-                      👑 OWNER
-                    </div>
-                  )}
+                  <div style={{
+                    position: 'absolute',
+                    top: '5px',
+                    right: '5px',
+                    display: 'flex',
+                    gap: '5px',
+                    'align-items': 'center'
+                  }}>
+                    {props.wsManager?.userHash === activity.ownerId && (
+                      <>
+                        <div style={{
+                          background: '#fbbf24',
+                          color: 'black',
+                          padding: '2px 8px',
+                          'border-radius': '12px',
+                          'font-size': '10px',
+                          'font-weight': 'bold'
+                        }}>
+                          👑 OWNER
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Delete "${activity.title}"? This action cannot be undone.`)) {
+                              props.wsManager.send({
+                                type: 'deleteActivity',
+                                activityId: activity.id
+                              });
+                            }
+                          }}
+                          style={{
+                            background: '#ef4444',
+                            color: 'white',
+                            border: 'none',
+                            padding: '4px 8px',
+                            'border-radius': '6px',
+                            'font-size': '11px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            'font-weight': '500'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.background = '#dc2626';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.background = '#ef4444';
+                          }}
+                        >
+                          🗑️ Delete
+                        </button>
+                      </>
+                    )}
+                  </div>
                   <div style={{ 'font-weight': 'bold', 'margin-bottom': '5px' }}>
                     {activity.title}
                   </div>
