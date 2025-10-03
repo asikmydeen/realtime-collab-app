@@ -75,21 +75,50 @@ export function ActivityCanvas(props) {
   }
   
   onMount(() => {
-    setupCanvas();
-    // If we already have the activity, we're ready
-    if (props.activity) {
-      console.log('[ActivityCanvas] Mounted with activity:', props.activity.id);
-      setCanvasReady(true);
+    // Delay canvas setup to ensure parent has correct dimensions
+    setTimeout(() => {
+      setupCanvas();
+      // If we already have the activity, we're ready
+      if (props.activity) {
+        console.log('[ActivityCanvas] Mounted with activity:', props.activity.id);
+        setCanvasReady(true);
+      }
+    }, 100);
+    
+    // Add resize observer to handle window resizing
+    const resizeObserver = new ResizeObserver(() => {
+      setupCanvas();
+    });
+    
+    if (canvasRef && canvasRef.parentElement) {
+      resizeObserver.observe(canvasRef.parentElement);
     }
+    
+    onCleanup(() => {
+      resizeObserver.disconnect();
+    });
   });
   
   function setupCanvas() {
+    if (!canvasRef || !drawingCanvasRef) return;
+    
     const parent = canvasRef.parentElement;
-    canvasRef.width = parent.clientWidth;
-    canvasRef.height = parent.clientHeight;
-    drawingCanvasRef.width = parent.clientWidth;
-    drawingCanvasRef.height = parent.clientHeight;
-    renderCanvas();
+    if (!parent) return;
+    
+    // Get the actual rendered dimensions
+    const rect = parent.getBoundingClientRect();
+    const width = Math.floor(rect.width);
+    const height = Math.floor(rect.height);
+    
+    // Only update if dimensions have changed
+    if (canvasRef.width !== width || canvasRef.height !== height) {
+      canvasRef.width = width;
+      canvasRef.height = height;
+      drawingCanvasRef.width = width;
+      drawingCanvasRef.height = height;
+      console.log('[ActivityCanvas] Canvas resized to:', width, 'x', height);
+      renderCanvas();
+    }
   }
   
   function renderCanvas() {
@@ -611,6 +640,9 @@ export function ActivityCanvas(props) {
           <canvas
             ref={canvasRef}
             style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
               width: '100%',
               height: '100%',
               cursor: selectMode() ? 'pointer' : (canContribute() ? 'crosshair' : 'not-allowed')
