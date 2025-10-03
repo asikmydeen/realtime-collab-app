@@ -567,13 +567,16 @@ export function ActivityCanvas(props) {
       const cleanup7 = props.wsManager.on('contributionStatus', (data) => {
         console.log('[ActivityCanvas] Contribution status:', data.status);
         if (data.status === 'approved') {
-          updateContributeStatus();
+          // Directly update the contribute status since we're approved
+          setCanContribute(true);
+          setRequestSent(false);
           // Show success message
           alert('Your contribution request has been approved!');
         } else if (data.status === 'requested') {
           alert('Your contribution request has been sent to the owner.');
         } else if (data.status === 'already_approved') {
-          updateContributeStatus();
+          setCanContribute(true);
+          setRequestSent(false);
         }
       });
       
