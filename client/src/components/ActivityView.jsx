@@ -657,8 +657,8 @@ export function ActivityView(props) {
           return prev;
         });
         
-        // Don't automatically select the default activity - let user choose
-        // selectActivity(data.activity);
+        // Automatically select the default activity
+        selectActivity(data.activity);
         
         // Also trigger activities request to populate the list
         requestActivities();

@@ -75,27 +75,24 @@ export function ActivityCanvas(props) {
   }
   
   onMount(() => {
-    // Delay canvas setup to ensure parent has correct dimensions
-    setTimeout(() => {
-      setupCanvas();
-      // If we already have the activity, we're ready
-      if (props.activity) {
-        console.log('[ActivityCanvas] Mounted with activity:', props.activity.id);
-        setCanvasReady(true);
-      }
-    }, 100);
+    // Setup canvas immediately
+    setupCanvas();
     
-    // Add resize observer to handle window resizing
-    const resizeObserver = new ResizeObserver(() => {
-      setupCanvas();
-    });
-    
-    if (canvasRef && canvasRef.parentElement) {
-      resizeObserver.observe(canvasRef.parentElement);
+    // If we already have the activity, we're ready
+    if (props.activity) {
+      console.log('[ActivityCanvas] Mounted with activity:', props.activity.id);
+      setCanvasReady(true);
     }
     
+    // Add window resize handler
+    const handleResize = () => {
+      setupCanvas();
+    };
+    
+    window.addEventListener('resize', handleResize);
+    
     onCleanup(() => {
-      resizeObserver.disconnect();
+      window.removeEventListener('resize', handleResize);
     });
   });
   
@@ -105,25 +102,30 @@ export function ActivityCanvas(props) {
     const parent = canvasRef.parentElement;
     if (!parent) return;
     
-    // Get the actual rendered dimensions
-    const rect = parent.getBoundingClientRect();
-    const width = Math.floor(rect.width);
-    const height = Math.floor(rect.height);
+    // Use offsetWidth/Height which are more reliable
+    const width = parent.offsetWidth || parent.clientWidth;
+    const height = parent.offsetHeight || parent.clientHeight;
     
-    // Only update if dimensions have changed
-    if (canvasRef.width !== width || canvasRef.height !== height) {
+    if (width > 0 && height > 0) {
       canvasRef.width = width;
       canvasRef.height = height;
       drawingCanvasRef.width = width;
       drawingCanvasRef.height = height;
-      console.log('[ActivityCanvas] Canvas resized to:', width, 'x', height);
+      console.log('[ActivityCanvas] Canvas setup:', width, 'x', height);
       renderCanvas();
     }
   }
   
   function renderCanvas() {
+    if (!canvasRef || !drawingCanvasRef) {
+      console.log('[ActivityCanvas] Canvas refs not ready');
+      return;
+    }
+    
     const ctx = canvasRef.getContext('2d');
     const drawCtx = drawingCanvasRef.getContext('2d');
+    
+    console.log('[ActivityCanvas] Rendering canvas:', canvasRef.width, 'x', canvasRef.height);
     
     // Clear canvases
     ctx.clearRect(0, 0, canvasRef.width, canvasRef.height);
@@ -206,6 +208,13 @@ export function ActivityCanvas(props) {
     });
   }
   
+  // Ensure canvas is setup when refs are ready
+  createEffect(() => {
+    if (canvasRef && drawingCanvasRef) {
+      setupCanvas();
+    }
+  });
+
   // Check if user can contribute
   function updateContributeStatus() {
     const activity = props.activity;
@@ -640,12 +649,11 @@ export function ActivityCanvas(props) {
           <canvas
             ref={canvasRef}
             style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
+              display: 'block',
               width: '100%',
               height: '100%',
-              cursor: selectMode() ? 'pointer' : (canContribute() ? 'crosshair' : 'not-allowed')
+              cursor: selectMode() ? 'pointer' : (canContribute() ? 'crosshair' : 'not-allowed'),
+              border: '1px solid #ccc'
             }}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
