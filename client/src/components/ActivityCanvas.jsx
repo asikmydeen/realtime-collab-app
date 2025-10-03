@@ -213,7 +213,13 @@ export function ActivityCanvas(props) {
   // Ensure canvas is setup when refs are ready
   createEffect(() => {
     if (canvasRef && drawingCanvasRef) {
+      // Immediate setup
       setupCanvas();
+      
+      // Delayed setup to catch any layout changes
+      setTimeout(() => {
+        setupCanvas();
+      }, 100);
     }
   });
 
@@ -615,6 +621,18 @@ export function ActivityCanvas(props) {
   createEffect(() => {
     remotePaths();
     renderCanvas();
+  });
+  
+  // Force canvas resize on any significant state change
+  createEffect(() => {
+    // Track dependencies that might affect layout
+    showParticipants();
+    canvasReady();
+    
+    // Resize canvas after state changes
+    requestAnimationFrame(() => {
+      setupCanvas();
+    });
   });
   
   return (
