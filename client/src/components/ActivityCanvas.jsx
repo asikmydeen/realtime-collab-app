@@ -297,13 +297,15 @@ export function ActivityCanvas(props) {
         const y = e.clientY - rect.top;
         
         // Start new path
+        const pathId = `${props.wsManager?.clientId}_${Date.now()}`;
         const newPath = {
           color: props.color || '#000000',
           size: props.brushSize || 3,
           points: [{ x, y }],
-          pathId: `${props.wsManager?.clientId}_${Date.now()}`,
+          pathId: pathId,
           clientId: props.wsManager?.clientId,
-          userHash: props.wsManager?.userHash
+          userHash: props.wsManager?.userHash,
+          timestamp: Date.now()
         };
         
         setPaths(prev => [...prev, newPath]);
@@ -314,7 +316,10 @@ export function ActivityCanvas(props) {
           x,
           y,
           color: props.color || '#000000',
-          size: props.brushSize || 3
+          size: props.brushSize || 3,
+          pathId: pathId,
+          userHash: props.wsManager?.userHash,
+          timestamp: Date.now()
         });
       }
     }
@@ -362,11 +367,14 @@ export function ActivityCanvas(props) {
         return newPaths;
       });
       
-      // Send draw update
+      // Send draw update with current path info
+      const currentPath = paths()[paths().length - 1];
       sendThrottledDraw({
         drawType: 'draw',
         x,
-        y
+        y,
+        pathId: currentPath?.pathId,
+        userHash: props.wsManager?.userHash
       });
       
       renderCanvas();
@@ -375,7 +383,14 @@ export function ActivityCanvas(props) {
   
   function handleMouseUp() {
     if (isDrawing()) {
-      sendThrottledDraw({ drawType: 'end' });
+      // Send end event with path info
+      const currentPath = paths()[paths().length - 1];
+      sendThrottledDraw({ 
+        drawType: 'end',
+        pathId: currentPath?.pathId,
+        userHash: props.wsManager?.userHash,
+        timestamp: Date.now()
+      });
     }
     setIsDrawing(false);
   }
@@ -432,12 +447,16 @@ export function ActivityCanvas(props) {
   
   function sendActivityDraw(data) {
     if (props.wsManager && props.activity) {
-      console.log('[ActivityCanvas] Sending draw for activity:', props.activity.id);
-      props.wsManager.send({
+      console.log('[ActivityCanvas] Sending draw for activity:', props.activity.id, 'type:', data.drawType);
+      const message = {
         type: 'activityDraw',
         activityId: props.activity.id, // Ensure activity ID is included
         ...data
-      });
+      };
+      console.log('[ActivityCanvas] Full draw message:', message);
+      props.wsManager.send(message);
+    } else {
+      console.warn('[ActivityCanvas] Cannot send draw - missing wsManager or activity');
     }
   }
   
@@ -486,7 +505,14 @@ export function ActivityCanvas(props) {
           const next = new Map(prev);
           const finishedPath = next.get(data.clientId);
           if (finishedPath && finishedPath.points.length > 1) {
-            setPaths(paths => [...paths, { ...finishedPath }]);
+            // Include all necessary path data
+            setPaths(paths => [...paths, { 
+              ...finishedPath,
+              pathId: data.pathId,
+              clientId: data.clientId,
+              userHash: data.userHash,
+              timestamp: data.timestamp
+            }]);
           }
           next.delete(data.clientId);
           return next;
@@ -510,11 +536,25 @@ export function ActivityCanvas(props) {
         }
         setCanvasReady(true);
         
-        // If we have activity data with permissions, update contribution requests
-        if (data.activity && props.wsManager?.userHash === data.activity.ownerId) {
-          const requests = data.activity.permissions?.contributorRequests || [];
-          console.log('[ActivityCanvas] Loading contribution requests:', requests.length);
-          setContributionRequests(requests);
+        // Update contribute status with fresh data
+        if (data.activity) {
+          // Update local activity reference if needed
+          if (props.activity && props.activity.id === data.activity.id) {
+            // Refresh contribution status
+            const userHash = props.wsManager?.userHash;
+            const isOwner = data.activity.ownerId === userHash;
+            const isApproved = data.activity.permissions?.approvedContributors?.includes(userHash);
+            const isAllowed = data.activity.permissions?.allowContributions;
+            console.log('[ActivityCanvas] Updated contribute status:', { isOwner, isApproved, isAllowed });
+            setCanContribute(isOwner || isApproved || isAllowed);
+          }
+          
+          // If we have activity data with permissions, update contribution requests
+          if (props.wsManager?.userHash === data.activity.ownerId) {
+            const requests = data.activity.permissions?.contributorRequests || [];
+            console.log('[ActivityCanvas] Loading contribution requests:', requests.length);
+            setContributionRequests(requests);
+          }
         }
       });
       
@@ -571,7 +611,16 @@ export function ActivityCanvas(props) {
           setCanContribute(true);
           setRequestSent(false);
           // Show success message
-          alert('Your contribution request has been approved!');
+          alert('Your contribution request has been approved! You can now draw.');
+          
+          // Rejoin the activity to refresh permissions
+          if (props.activity) {
+            console.log('[ActivityCanvas] Rejoining activity to refresh permissions');
+            props.wsManager.send({
+              type: 'joinActivity',
+              activityId: props.activity.id
+            });
+          }
         } else if (data.status === 'requested') {
           alert('Your contribution request has been sent to the owner.');
         } else if (data.status === 'already_approved') {
@@ -602,6 +651,17 @@ export function ActivityCanvas(props) {
         }
       });
       
+      // Handle contributor approval (update owner's UI)
+      const cleanup11 = props.wsManager.on('contributorApproved', (data) => {
+        console.log('[ActivityCanvas] Contributor approved:', data);
+        if (data.activityId === props.activity?.id) {
+          // Remove from pending requests
+          setContributionRequests(prev => 
+            prev.filter(req => req.userHash !== data.userHash)
+          );
+        }
+      });
+      
       onCleanup(() => {
         cleanup1();
         cleanup2();
@@ -613,6 +673,7 @@ export function ActivityCanvas(props) {
         cleanup8();
         cleanup9();
         cleanup10();
+        cleanup11?.();
         if (drawingThrottle.timeoutId) {
           clearTimeout(drawingThrottle.timeoutId);
         }

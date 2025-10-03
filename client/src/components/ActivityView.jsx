@@ -22,6 +22,7 @@ export function ActivityView(props) {
   const [viewType, setViewType] = createSignal('aggregated'); // 'aggregated' or 'detailed'
   const [myActivities, setMyActivities] = createSignal([]);
   const [showMyActivities, setShowMyActivities] = createSignal(false);
+  const [isLoadingActivities, setIsLoadingActivities] = createSignal(false);
   
   // Map interaction
   const [isPanning, setIsPanning] = createSignal(false);
@@ -323,6 +324,7 @@ export function ActivityView(props) {
     
     viewportUpdateTimeout = setTimeout(() => {
       if (props.wsManager && currentBounds()) {
+        setIsLoadingActivities(true); // Set loading state
         props.wsManager.send({
           type: 'getActivities',
           bounds: currentBounds(),
@@ -623,6 +625,7 @@ export function ActivityView(props) {
           setStreetActivities(data.streetActivities || {});
           setViewType('aggregated');
         }
+        setIsLoadingActivities(false); // Clear loading state
         renderMap();
       });
       
@@ -667,6 +670,7 @@ export function ActivityView(props) {
       const cleanup5 = props.wsManager.on('myActivities', (data) => {
         console.log('[ActivityView] Received my activities:', data.activities?.length);
         setMyActivities(data.activities || []);
+        setIsLoadingActivities(false); // Clear loading state
       });
       
       onCleanup(() => {
@@ -793,6 +797,7 @@ export function ActivityView(props) {
                   setShowMyActivities(newValue);
                   if (newValue && props.wsManager) {
                     console.log('[ActivityView] Requesting my activities, userHash:', props.wsManager.userHash);
+                    setIsLoadingActivities(true); // Set loading state
                     // Request user's activities
                     props.wsManager.send({ type: 'getMyActivities' });
                   } else if (!newValue) {
@@ -835,7 +840,25 @@ export function ActivityView(props) {
             'overflow-y': 'auto',
             padding: '10px'
           }}>
-            {(showMyActivities() ? myActivities() : activities()).length === 0 ? (
+            {isLoadingActivities() ? (
+              <div style={{
+                'text-align': 'center',
+                padding: '40px 20px',
+                color: '#6b7280'
+              }}>
+                <div style={{
+                  width: '48px',
+                  height: '48px',
+                  border: '3px solid #e5e7eb',
+                  'border-top': '3px solid #3b82f6',
+                  'border-radius': '50%',
+                  margin: '0 auto 15px',
+                  animation: 'spin 1s linear infinite'
+                }} />
+                <div style={{ 'font-weight': 'bold', 'margin-bottom': '5px' }}>Loading activities...</div>
+                <div style={{ 'font-size': '14px' }}>Please wait while we fetch nearby activities</div>
+              </div>
+            ) : (showMyActivities() ? myActivities() : activities()).length === 0 ? (
               <div style={{
                 'text-align': 'center',
                 padding: '40px 20px',
@@ -1064,6 +1087,14 @@ export function ActivityView(props) {
         <div>⌨️ +/- keys to zoom</div>
         <div>/ Search places</div>
       </div>
+      
+      {/* Style tag */}
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
