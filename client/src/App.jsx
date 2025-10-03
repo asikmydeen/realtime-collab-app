@@ -1,17 +1,14 @@
-import { createSignal, onMount, onCleanup, createEffect, For, Show } from 'solid-js';
-import { useNavigate, useLocation } from '@solidjs/router';
-import { ActivityView } from './components/ActivityView';
-import { CanvasList } from './components/CanvasList';
+import { createSignal, onMount, onCleanup, createEffect } from 'solid-js';
+import { Route } from '@solidjs/router';
+import { MapView } from './pages/MapView';
+import { ListView } from './pages/ListView';
 import { WebSocketManager } from './lib/websocket';
 import { WasmProcessor } from './lib/wasm';
 import { config } from './config';
-import { getUserColor, generateUsername, getContrastColor } from './utils/userColors';
+import { getUserColor, generateUsername } from './utils/userColors';
 import { inject } from '@vercel/analytics';
 
 function App() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  
   // State management
   const [connected, setConnected] = createSignal(false);
   const [users, setUsers] = createSignal(new Map());
@@ -20,8 +17,6 @@ function App() {
   const [color, setColor] = createSignal('#000000');
   const [brushSize, setBrushSize] = createSignal(3);
   const [username, setUsername] = createSignal(generateUsername());
-  
-  // We only have geo mode now - removed mode switching
   
   // Performance metrics
   const [fps, setFps] = createSignal(60);
@@ -32,9 +27,6 @@ function App() {
   // WebSocket and WASM managers
   const [wsManager, setWsManager] = createSignal(null);
   const [wasmProcessor, setWasmProcessor] = createSignal(null);
-  
-  // Canvas API
-  const [canvasAPI, setCanvasAPI] = createSignal(null);
   
   onMount(async () => {
     // Initialize Vercel Analytics
@@ -170,171 +162,28 @@ function App() {
       setOperations(prev => prev + 1);
     }
   };
-  
-  const handleInactive = () => {
-    // Show inactive message
-    console.log('User inactive - need to reload for new space');
-  };
 
   return (
-    <div class="app" style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
-      {/* Minimal Header */}
-      <header style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        height: '50px',
-        background: 'rgba(0, 0, 0, 0.8)',
-        'backdrop-filter': 'blur(10px)',
-        display: 'flex',
-        'align-items': 'center',
-        'justify-content': 'space-between',
-        padding: '0 20px',
-        'z-index': 1000,
-        'box-shadow': '0 2px 20px rgba(0, 0, 0, 0.2)'
-      }}>
-        <div style={{ display: 'flex', 'align-items': 'center', gap: '20px' }}>
-          <h1 style={{ 
-            margin: 0, 
-            'font-size': '18px', 
-            'font-weight': '600',
-            color: 'white',
-            display: 'flex',
-            'align-items': 'center',
-            gap: '8px'
-          }}>
-            <span style={{ 'font-size': '24px' }}>✨</span>
-            Infinite Canvas
-          </h1>
-          <div style={{ 
-            display: 'flex', 
-            gap: '15px',
-            color: 'rgba(255, 255, 255, 0.8)',
-            'font-size': '14px'
-          }}>
-            <span style={{ color: connected() ? '#4ade80' : '#ef4444' }}>
-              {connected() ? '🟢' : '🔴'} {connected() ? 'Live' : 'Offline'}
-            </span>
-            <span>👥 {users().size} Artists</span>
-            <span>✏️ {operations()} Strokes</span>
-          </div>
-          <button
-            onClick={() => navigate('/list')}
-            style={{
-              background: 'transparent',
-              border: '1px solid rgba(255, 255, 255, 0.3)',
-              color: 'white',
-              padding: '5px 10px',
-              'border-radius': '6px',
-              cursor: 'pointer',
-              'font-size': '13px',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.background = 'rgba(255, 255, 255, 0.1)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = 'transparent';
-            }}
-          >
-            📋 List View
-          </button>
-        </div>
-      </header>
-      
-      {/* Routes */}
-      <div style={{ 
-        position: 'absolute',
-        top: '50px',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: '#fafafa'
-      }}>
-        <Show when={location.pathname === '/list'}>
-          <CanvasList
-            wsManager={wsManager()}
-            connected={connected()}
-          />
-        </Show>
-        <Show when={location.pathname === '/'}>
-          <ActivityView
-            color={color()}
-            brushSize={brushSize()}
-            wsManager={wsManager()}
-            connected={connected()}
-          />
-        </Show>
-      </div>
-      
-      {/* Minimal Bottom Toolbar - Only show on map view */}
-      <Show when={location.pathname === '/'}>
-        <div style={{
-        position: 'absolute',
-        bottom: '20px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        background: 'rgba(0, 0, 0, 0.9)',
-        'backdrop-filter': 'blur(10px)',
-        'border-radius': '20px',
-        padding: '10px 20px',
-        display: 'flex',
-        gap: '20px',
-        'align-items': 'center',
-        'box-shadow': '0 4px 30px rgba(0, 0, 0, 0.3)',
-        'z-index': 1000
-      }}>
-        {/* Color Palette */}
-        <div style={{ display: 'flex', gap: '8px' }}>
-          {['#000000', '#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899'].map(c => (
-            <button
-              onClick={() => setColor(c)}
-              style={{
-                width: '28px',
-                height: '28px',
-                'border-radius': '50%',
-                background: c,
-                border: color() === c ? '3px solid white' : '2px solid transparent',
-                cursor: 'pointer',
-                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                transform: color() === c ? 'scale(1.15)' : 'scale(1)',
-                'box-shadow': color() === c ? `0 0 0 3px ${c}40` : 'none'
-              }}
-              onMouseEnter={(e) => {
-                if (color() !== c) e.target.style.transform = 'scale(1.1)';
-              }}
-              onMouseLeave={(e) => {
-                if (color() !== c) e.target.style.transform = 'scale(1)';
-              }}
-            />
-          ))}
-        </div>
-        
-        {/* Separator */}
-        <div style={{ width: '1px', height: '30px', background: 'rgba(255, 255, 255, 0.2)' }} />
-        
-        {/* Brush Size */}
-        <div style={{ display: 'flex', 'align-items': 'center', gap: '10px' }}>
-          <span style={{ color: 'white', 'font-size': '12px' }}>Size</span>
-          <input
-            type="range"
-            min="1"
-            max="20"
-            value={brushSize()}
-            onInput={(e) => setBrushSize(Number(e.target.value))}
-            style={{ width: '80px' }}
-          />
-          <div style={{
-            width: `${brushSize()}px`,
-            height: `${brushSize()}px`,
-            'border-radius': '50%',
-            background: color()
-          }} />
-        </div>
-      </div>
-      </Show>
-    </div>
+    <>
+      <Route path="/" component={() => 
+        <MapView
+          connected={connected}
+          users={users}
+          operations={operations}
+          color={color}
+          setColor={setColor}
+          brushSize={brushSize}
+          setBrushSize={setBrushSize}
+          wsManager={wsManager}
+        />
+      } />
+      <Route path="/list" component={() => 
+        <ListView
+          connected={connected}
+          wsManager={wsManager}
+        />
+      } />
+    </>
   );
 }
 

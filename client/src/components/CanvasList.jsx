@@ -1,6 +1,8 @@
 import { createSignal, createEffect, onMount, For } from 'solid-js';
+import { useNavigate } from '@solidjs/router';
 
 export function CanvasList(props) {
+  const navigate = useNavigate();
   const [allCanvases, setAllCanvases] = createSignal([]);
   const [isLoading, setIsLoading] = createSignal(true);
   const [sortColumn, setSortColumn] = createSignal('createdAt');
@@ -94,7 +96,7 @@ export function CanvasList(props) {
   // Navigate to canvas
   function navigateToCanvas(canvas) {
     // Navigate back to map view and open this canvas
-    window.location.href = `/?canvas=${canvas.id}`;
+    navigate(`/?canvas=${canvas.id}`);
   }
 
   const tableStyles = {
@@ -170,7 +172,7 @@ export function CanvasList(props) {
             🔄 Refresh
           </button>
           <button
-            onClick={() => window.location.href = '/'}
+            onClick={() => navigate('/')}
             style={{
               padding: '8px 16px',
               background: '#6b7280',
