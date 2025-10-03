@@ -2,6 +2,28 @@ import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import { mapService } from '../services/mapService';
 import { ActivityCanvas } from './ActivityCanvas';
 
+// Generate artistic names for quick canvas creation
+function generateArtisticName() {
+  const adjectives = [
+    'Vibrant', 'Serene', 'Dynamic', 'Ethereal', 'Radiant',
+    'Whimsical', 'Luminous', 'Enchanted', 'Cosmic', 'Mystical',
+    'Dreamy', 'Bold', 'Tranquil', 'Electric', 'Harmonious',
+    'Celestial', 'Flowing', 'Prismatic', 'Infinite', 'Golden'
+  ];
+  
+  const nouns = [
+    'Canvas', 'Dreamscape', 'Expression', 'Vision', 'Creation',
+    'Palette', 'Sanctuary', 'Journey', 'Symphony', 'Horizon',
+    'Reflection', 'Spectrum', 'Odyssey', 'Tapestry', 'Realm',
+    'Oasis', 'Aurora', 'Mosaic', 'Nebula', 'Garden'
+  ];
+  
+  const adjective = adjectives[Math.floor(Math.random() * adjectives.length)];
+  const noun = nouns[Math.floor(Math.random() * nouns.length)];
+  
+  return `${adjective} ${noun}`;
+}
+
 export function ActivityView(props) {
   let mapCanvasRef;
   let tilesCanvasRef;
@@ -887,21 +909,60 @@ export function ActivityView(props) {
                 {showMyActivities() ? '📍 Show All' : '👤 My Canvases'}
               </button>
             </div>
-            <button
-              onClick={() => setShowCreateActivity(true)}
-              style={{
-                width: '100%',
-                padding: '10px',
-                background: '#3b82f6',
-                color: 'white',
-                border: 'none',
-                'border-radius': '10px',
-                'font-weight': 'bold',
-                cursor: 'pointer'
-              }}
-            >
-              ✨ Create New Canvas
-            </button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={() => setShowCreateActivity(true)}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  background: '#6b7280',
+                  color: 'white',
+                  border: 'none',
+                  'border-radius': '10px',
+                  'font-weight': 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                ✨ Create Canvas
+              </button>
+              <button
+                onClick={async () => {
+                  const name = generateArtisticName();
+                  const location = userLocation();
+                  if (location && props.wsManager) {
+                    const address = await mapService.getLocationName(location.lat, location.lng);
+                    props.wsManager.send({
+                      type: 'createActivity',
+                      title: name,
+                      description: `Created on ${new Date().toLocaleDateString()}`,
+                      lat: location.lat,
+                      lng: location.lng,
+                      address: address?.displayName || '',
+                      street: address?.street || address?.road || 'Unknown Street'
+                    });
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  background: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  'border-radius': '10px',
+                  'font-weight': 'bold',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = '#2563eb';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = '#3b82f6';
+                }}
+              >
+                ⚡ Quick Create
+              </button>
+            </div>
           </div>
           
           <div style={{
@@ -1064,6 +1125,14 @@ export function ActivityView(props) {
               });
             }
           }}
+        />
+      </Show>
+      
+      {/* Create Activity Modal */}
+      <Show when={showCreateActivity()}>
+        <CreateActivityModal
+          onCreate={(data) => createActivity(data)}
+          onClose={() => setShowCreateActivity(false)}
         />
       </Show>
       
