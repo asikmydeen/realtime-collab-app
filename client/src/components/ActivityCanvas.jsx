@@ -1,5 +1,6 @@
 import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import { ActivityControls } from './ActivityControls';
+import './ActivityCanvas.css';
 
 export function ActivityCanvas(props) {
   let canvasRef;
@@ -102,9 +103,10 @@ export function ActivityCanvas(props) {
     const parent = canvasRef.parentElement;
     if (!parent) return;
     
-    // Use offsetWidth/Height which are more reliable
-    const width = parent.offsetWidth || parent.clientWidth;
-    const height = parent.offsetHeight || parent.clientHeight;
+    // Force layout calculation
+    const rect = parent.getBoundingClientRect();
+    const width = Math.floor(rect.width);
+    const height = Math.floor(rect.height);
     
     if (width > 0 && height > 0) {
       canvasRef.width = width;
@@ -616,54 +618,30 @@ export function ActivityCanvas(props) {
   });
   
   return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      background: 'rgba(0, 0, 0, 0.9)',
-      'z-index': 1500
-    }}>
-      {/* Canvas Area */}
-      <div style={{
-        width: '100%',
-        position: 'relative',
-        display: 'flex',
-        'align-items': 'center',
-        'justify-content': 'center'
-      }}>
-        <div style={{
-          width: 'calc(100% - 40px)',
-          height: 'calc(100% - 40px)',
-          'max-width': window.innerWidth < 768 ? '100%' : '95%',
-          'max-height': window.innerWidth < 768 ? '100%' : '95%',
-          background: 'white',
-          'border-radius': window.innerWidth < 768 ? '0' : '15px',
-          'box-shadow': '0 10px 50px rgba(0, 0, 0, 0.5)',
-          position: 'relative',
-          overflow: 'hidden',
-          margin: window.innerWidth < 768 ? '0' : '20px'
-        }}>
-          <canvas
-            ref={drawingCanvasRef}
-            style={{ position: 'absolute', top: 0, left: 0, display: 'none' }}
-          />
-          <canvas
-            ref={canvasRef}
-            style={{
-              display: 'block',
-              width: '100%',
-              height: '100%',
-              cursor: selectMode() ? 'pointer' : (canContribute() ? 'crosshair' : 'not-allowed'),
-              border: '1px solid #ccc'
-            }}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-          />
-        </div>
+    <div class="activity-canvas-container">
+      <div class="activity-canvas-wrapper">
+        <div class="activity-canvas-content">
+          <div class="activity-canvas-main">
+            <canvas
+              ref={drawingCanvasRef}
+              style={{ display: 'none' }}
+              class="activity-canvas"
+            />
+            <canvas
+              ref={canvasRef}
+              class="activity-canvas"
+              style={{
+                cursor: selectMode() ? 'pointer' : (canContribute() ? 'crosshair' : 'not-allowed')
+              }}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+            />
+          </div>
         
-        {/* Activity Info */}
-        <div style={{
+          {/* Activity Info */}
+          <div style={{
           position: 'absolute',
           top: '20px',
           left: '50%',
@@ -682,8 +660,8 @@ export function ActivityCanvas(props) {
           </p>
         </div>
         
-        {/* Top Right Controls */}
-        <div style={{
+          {/* Top Right Controls */}
+          <div style={{
           position: 'absolute',
           top: '20px',
           right: '20px',
@@ -756,8 +734,8 @@ export function ActivityCanvas(props) {
           </button>
         </div>
         
-        {/* Drawing Author Overlay */}
-        <Show when={selectMode() && hoveredPath() && props.wsManager?.userHash === props.activity?.ownerId}>
+          {/* Drawing Author Overlay */}
+          <Show when={selectMode() && hoveredPath() && props.wsManager?.userHash === props.activity?.ownerId}>
           <div style={{
             position: 'absolute',
             bottom: '20px',
@@ -799,8 +777,8 @@ export function ActivityCanvas(props) {
           </div>
         </Show>
         
-        {/* Contribution Request UI */}
-        <Show when={!canContribute() && props.wsManager?.userHash !== props.activity?.ownerId}>
+          {/* Contribution Request UI */}
+          <Show when={!canContribute() && props.wsManager?.userHash !== props.activity?.ownerId}>
           <div style={{
             position: 'absolute',
             bottom: '80px',
@@ -861,8 +839,8 @@ export function ActivityCanvas(props) {
           </div>
         </Show>
         
-        {/* Owner Contribution Requests Panel */}
-        <Show when={props.wsManager?.userHash === props.activity?.ownerId && contributionRequests().length > 0}>
+          {/* Owner Contribution Requests Panel */}
+          <Show when={props.wsManager?.userHash === props.activity?.ownerId && contributionRequests().length > 0}>
           <div style={{
             position: 'absolute',
             top: window.innerWidth < 640 ? '70px' : '80px',
@@ -945,8 +923,8 @@ export function ActivityCanvas(props) {
           </div>
         </Show>
         
-        {/* Owner Controls */}
-        <ActivityControls
+          {/* Owner Controls */}
+          <ActivityControls
           activity={props.activity}
           wsManager={props.wsManager}
           selectMode={selectMode()}
@@ -1023,6 +1001,8 @@ export function ActivityCanvas(props) {
           </div>
         </div>
       </Show>
+        </div>
+      </div>
     </div>
   );
 }
