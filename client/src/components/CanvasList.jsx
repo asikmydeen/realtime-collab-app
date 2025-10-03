@@ -42,17 +42,10 @@ export function CanvasList(props) {
         setAllCanvases(prev => prev.filter(a => a.id !== data.activityId));
       });
 
-      const cleanup4 = props.wsManager.on('allActivitiesDeleted', (data) => {
-        console.log('[CanvasList] All activities deleted:', data.count);
-        setAllCanvases([]);
-        alert(`Successfully deleted ${data.count} canvases!`);
-      });
-
       return () => {
         cleanup();
         cleanup2();
         cleanup3();
-        cleanup4();
       };
     }
   });
@@ -177,49 +170,6 @@ export function CanvasList(props) {
             }}
           >
             🔄 Refresh
-          </button>
-          <button
-            onClick={() => {
-              const totalCanvases = allCanvases().length;
-              
-              if (totalCanvases === 0) {
-                alert('No canvases to delete.');
-                return;
-              }
-              
-              if (confirm(`⚠️ DELETE ALL ${totalCanvases} CANVASES IN THE SYSTEM? This will delete EVERYTHING and cannot be undone!`)) {
-                if (confirm(`Are you REALLY sure? This will delete ALL ${totalCanvases} canvases created by ALL users!`)) {
-                  // Send delete all request
-                  props.wsManager.send({
-                    type: 'deleteAllActivities'
-                  });
-                  
-                  alert(`Deleting ALL ${totalCanvases} canvases...`);
-                }
-              }
-            }}
-            style={{
-              padding: '8px 16px',
-              background: '#991b1b',
-              color: 'white',
-              border: 'none',
-              'border-radius': '6px',
-              cursor: 'pointer',
-              'font-weight': '700',
-              transition: 'all 0.2s',
-              'text-transform': 'uppercase',
-              'letter-spacing': '0.5px'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.background = '#7f1d1d';
-              e.target.style.transform = 'scale(1.05)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = '#991b1b';
-              e.target.style.transform = 'scale(1)';
-            }}
-          >
-            ⚠️ DELETE ALL CANVASES
           </button>
           <button
             onClick={() => navigate('/')}
