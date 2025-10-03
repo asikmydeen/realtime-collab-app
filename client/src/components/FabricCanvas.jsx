@@ -351,10 +351,14 @@ export function FabricCanvas(props) {
   }
 
   function handlePathCreated(e) {
-    if (!canContribute()) return;
+    if (!canContribute()) {
+      console.log('[FabricCanvas] Cannot contribute, skipping path creation');
+      return;
+    }
 
     const path = e.path;
     if (path) {
+      console.log('[FabricCanvas] Path created:', path);
       // Add metadata to the path
       path.set({
         id: `path_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -371,8 +375,12 @@ export function FabricCanvas(props) {
 
   // WebSocket message handlers
   function sendObjectAdded(obj) {
-    if (!props.wsManager || !props.activity) return;
+    if (!props.wsManager || !props.activity) {
+      console.log('[FabricCanvas] Cannot send object - wsManager or activity missing');
+      return;
+    }
 
+    console.log('[FabricCanvas] Sending object added:', obj.type, obj.id);
     const serialized = serializeObject(obj);
     sendThrottledUpdate({
       type: 'fabricObjectAdded',
@@ -529,10 +537,13 @@ export function FabricCanvas(props) {
 
   // Handle remote updates
   function handleRemoteObjectAdded(data) {
+    console.log('[FabricCanvas] Received remote object:', data);
     const obj = deserializeObject(data.object);
     if (obj && canvas()) {
+      obj.isRemote = true; // Mark as remote to prevent re-sending
       canvas().add(obj);
       canvas().renderAll();
+      console.log('[FabricCanvas] Added remote object to canvas');
     }
   }
 
