@@ -39,6 +39,7 @@ export function ActivityView(props) {
   
   let zoomAnimationFrame = null;
   let viewportUpdateTimeout = null;
+  let activityPollingInterval = null;
   
   onMount(async () => {
     setupCanvas();
@@ -630,7 +631,24 @@ export function ActivityView(props) {
       });
       
       const cleanup2 = props.wsManager.on('activityCreated', (data) => {
-        selectActivity(data.activity);
+        // Add new activity to the list if it's in the current bounds
+        if (data.activity && currentBounds() && 
+            isInBounds(data.activity.lat, data.activity.lng, currentBounds())) {
+          setActivities(prev => {
+            // Check if activity already exists
+            if (prev.find(a => a.id === data.activity.id)) {
+              return prev;
+            }
+            return [...prev, data.activity];
+          });
+          // Re-render the map to show new marker
+          renderMap();
+        }
+        
+        // If this is the activity we just created, select it
+        if (data.isOwnCreation) {
+          selectActivity(data.activity);
+        }
       });
       
       const cleanup3 = props.wsManager.on('activityUpdate', (data) => {
@@ -684,6 +702,37 @@ export function ActivityView(props) {
         }
         if (viewportUpdateTimeout) {
           clearTimeout(viewportUpdateTimeout);
+        }
+        if (activityPollingInterval) {
+          clearInterval(activityPollingInterval);
+        }
+      });
+      
+      // Set up polling for new activities every 5 seconds when on street level
+      createEffect(() => {
+        if (mapZoom() >= 17 && currentBounds() && props.wsManager) {
+          // Clear existing interval
+          if (activityPollingInterval) {
+            clearInterval(activityPollingInterval);
+          }
+          
+          // Set up new interval
+          activityPollingInterval = setInterval(() => {
+            if (!isLoadingActivities() && !showMyActivities()) {
+              console.log('[ActivityView] Polling for new activities');
+              props.wsManager.send({
+                type: 'getActivities',
+                bounds: currentBounds(),
+                zoom: mapZoom()
+              });
+            }
+          }, 5000);
+        } else {
+          // Clear interval when not on street level
+          if (activityPollingInterval) {
+            clearInterval(activityPollingInterval);
+            activityPollingInterval = null;
+          }
         }
       });
     }
@@ -789,7 +838,7 @@ export function ActivityView(props) {
               'margin-bottom': '10px'
             }}>
               <h3 style={{ margin: 0, 'font-size': '18px' }}>
-                {showMyActivities() ? 'My Activities' : 'Activities Nearby'}
+                {showMyActivities() ? 'My Canvases' : 'Canvas List'}
               </h3>
               <button
                 onClick={() => {
@@ -815,7 +864,7 @@ export function ActivityView(props) {
                   cursor: 'pointer'
                 }}
               >
-                {showMyActivities() ? '📍 Show All' : '👤 My Activities'}
+                {showMyActivities() ? '📍 Show All' : '👤 My Canvases'}
               </button>
             </div>
             <button
@@ -831,7 +880,7 @@ export function ActivityView(props) {
                 cursor: 'pointer'
               }}
             >
-              ✨ Create New Activity
+              ✨ Create New Canvas
             </button>
           </div>
           
@@ -855,8 +904,8 @@ export function ActivityView(props) {
                   margin: '0 auto 15px',
                   animation: 'spin 1s linear infinite'
                 }} />
-                <div style={{ 'font-weight': 'bold', 'margin-bottom': '5px' }}>Loading activities...</div>
-                <div style={{ 'font-size': '14px' }}>Please wait while we fetch nearby activities</div>
+                <div style={{ 'font-weight': 'bold', 'margin-bottom': '5px' }}>Loading canvases...</div>
+                <div style={{ 'font-size': '14px' }}>Please wait while we fetch nearby canvases</div>
               </div>
             ) : (showMyActivities() ? myActivities() : activities()).length === 0 ? (
               <div style={{
@@ -867,14 +916,14 @@ export function ActivityView(props) {
                 {showMyActivities() ? (
                   <>
                     <div style={{ 'font-size': '48px', 'margin-bottom': '15px' }}>🎨</div>
-                    <div style={{ 'font-weight': 'bold', 'margin-bottom': '5px' }}>No Activities Yet</div>
-                    <div style={{ 'font-size': '14px' }}>Create your first activity to start drawing!</div>
+                    <div style={{ 'font-weight': 'bold', 'margin-bottom': '5px' }}>No Canvases Yet</div>
+                    <div style={{ 'font-size': '14px' }}>Create your first canvas to start drawing!</div>
                   </>
                 ) : (
                   <>
                     <div style={{ 'font-size': '48px', 'margin-bottom': '15px' }}>📍</div>
-                    <div style={{ 'font-weight': 'bold', 'margin-bottom': '5px' }}>No Activities Here</div>
-                    <div style={{ 'font-size': '14px' }}>Be the first to create an activity in this area!</div>
+                    <div style={{ 'font-weight': 'bold', 'margin-bottom': '5px' }}>No Canvases Here</div>
+                    <div style={{ 'font-size': '14px' }}>Be the first to create a canvas in this area!</div>
                   </>
                 )}
               </div>
@@ -1121,11 +1170,11 @@ function CreateActivityModal(props) {
         width: '400px',
         'box-shadow': '0 10px 50px rgba(0, 0, 0, 0.3)'
       }}>
-        <h2 style={{ margin: '0 0 20px 0' }}>Create New Activity</h2>
+        <h2 style={{ margin: '0 0 20px 0' }}>Create New Canvas</h2>
         
         <input
           type="text"
-          placeholder="Activity Title"
+          placeholder="Canvas Title"
           value={title()}
           onInput={(e) => setTitle(e.target.value)}
           style={{
@@ -1169,7 +1218,7 @@ function CreateActivityModal(props) {
               cursor: title().trim() ? 'pointer' : 'not-allowed'
             }}
           >
-            Create Activity
+            Create Canvas
           </button>
           <button
             onClick={props.onClose}

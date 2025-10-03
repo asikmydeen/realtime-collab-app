@@ -1230,11 +1230,23 @@ async function handleCreateActivity(clientId, message) {
     
     client.ws.send(JSON.stringify({
       type: 'activityCreated',
-      activity
+      activity,
+      isOwnCreation: true
     }));
     
-    // Notify others in the area
-    broadcastActivityUpdate(activity);
+    // Notify others in the area about the new activity
+    clients.forEach((targetClient, targetId) => {
+      if (targetId !== clientId && targetClient.ws.readyState === 1 && targetClient.geoViewport) {
+        const bounds = targetClient.geoViewport.bounds;
+        if (bounds && activityPersistence.isInBounds(activity.lat, activity.lng, bounds)) {
+          targetClient.ws.send(JSON.stringify({
+            type: 'activityCreated',
+            activity,
+            isOwnCreation: false
+          }));
+        }
+      }
+    });
   } catch (error) {
     console.error('Failed to create activity:', error);
     client.ws.send(JSON.stringify({

@@ -473,13 +473,17 @@ export class ActivityPersistence {
       // Owner can always contribute
       if (activity.ownerId === userHash) return true;
       
-      // Check if contributions are allowed
-      if (!activity.permissions || !activity.permissions.allowContributions) return false;
-      
       // Check if user is banned
-      if (activity.permissions.bannedUsers && activity.permissions.bannedUsers.includes(userHash)) return false;
+      if (activity.permissions?.bannedUsers?.includes(userHash)) return false;
       
-      return true;
+      // Check if user is in approved contributors list
+      if (activity.permissions?.approvedContributors?.includes(userHash)) return true;
+      
+      // Check if contributions are allowed for everyone
+      if (activity.permissions?.allowContributions) return true;
+      
+      // Default to not allowed
+      return false;
     } catch (error) {
       console.error('Failed to check contribution permission:', error);
       return true; // Default to allow on error
