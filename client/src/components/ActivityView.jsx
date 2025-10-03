@@ -792,33 +792,75 @@ export function ActivityView(props) {
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
           onWheel={handleWheel}
+          onTouchStart={(e) => {
+            if (e.touches.length === 1) {
+              setIsPanning(true);
+              setPanStart({
+                x: e.touches[0].clientX + viewport().x,
+                y: e.touches[0].clientY + viewport().y
+              });
+              e.preventDefault();
+            }
+          }}
+          onTouchMove={(e) => {
+            if (isPanning() && e.touches.length === 1) {
+              const newX = panStart().x - e.touches[0].clientX;
+              const newY = panStart().y - e.touches[0].clientY;
+              setViewport({ x: newX, y: newY });
+              
+              const newCenter = mapService.worldPixelToLatLng(
+                newX + mapCanvasRef.width / 2,
+                newY + mapCanvasRef.height / 2,
+                mapZoom()
+              );
+              
+              const bounds = mapService.getViewportBounds(
+                newCenter.lat,
+                newCenter.lng,
+                mapCanvasRef.width,
+                mapCanvasRef.height,
+                mapZoom()
+              );
+              
+              setCurrentBounds(bounds);
+              loadTilesForCurrentView();
+              renderMap();
+              requestActivities();
+              e.preventDefault();
+            }
+          }}
+          onTouchEnd={() => setIsPanning(false)}
         />
       </div>
       
       {/* Location Header */}
       <div style={{
         position: 'absolute',
-        top: '20px',
-        left: '50%',
-        transform: 'translateX(-50%)',
+        top: window.innerWidth <= 768 ? '60px' : '20px',
+        left: window.innerWidth <= 768 ? '10px' : '50%',
+        right: window.innerWidth <= 768 ? '10px' : 'auto',
+        transform: window.innerWidth <= 768 ? 'none' : 'translateX(-50%)',
         display: 'flex',
         'align-items': 'center',
-        gap: '15px'
+        'justify-content': window.innerWidth <= 768 ? 'space-between' : 'center',
+        gap: window.innerWidth <= 768 ? '10px' : '15px',
+        'z-index': 100
       }}>
         <button
           onClick={() => setShowSearch(!showSearch())}
           style={{
             background: 'rgba(0, 0, 0, 0.8)',
             color: 'white',
-            padding: '10px 15px',
+            padding: window.innerWidth <= 768 ? '8px 12px' : '10px 15px',
             'border-radius': '20px',
             border: 'none',
             cursor: 'pointer',
             display: 'flex',
             'align-items': 'center',
             gap: '8px',
-            'font-size': '14px',
-            'backdrop-filter': 'blur(10px)'
+            'font-size': window.innerWidth <= 768 ? '12px' : '14px',
+            'backdrop-filter': 'blur(10px)',
+            'flex-shrink': 0
           }}
         >
           🔍 Search Places
@@ -827,21 +869,27 @@ export function ActivityView(props) {
         <div style={{
           background: 'rgba(0, 0, 0, 0.8)',
           color: 'white',
-          padding: '10px 20px',
+          padding: window.innerWidth <= 768 ? '8px 12px' : '10px 20px',
           'border-radius': '20px',
-          'font-size': '14px',
-          'backdrop-filter': 'blur(10px)'
+          'font-size': window.innerWidth <= 768 ? '12px' : '14px',
+          'backdrop-filter': 'blur(10px)',
+          'white-space': 'nowrap',
+          'overflow': 'hidden',
+          'text-overflow': 'ellipsis',
+          'max-width': window.innerWidth <= 768 ? '200px' : 'none'
         }}>
           📍 {locationName()} • Zoom: {mapZoom().toFixed(1)}
-          {mapZoom() >= 17 ? (
-            <span style={{ color: '#4ade80', 'margin-left': '10px' }}>
-              Street View ({activities().length} activities)
-            </span>
-          ) : (
-            <span style={{ color: '#60a5fa', 'margin-left': '10px' }}>
-              City View (zoom in for activities)
-            </span>
-          )}
+          <Show when={window.innerWidth > 768}>
+            {mapZoom() >= 17 ? (
+              <span style={{ color: '#4ade80', 'margin-left': '10px' }}>
+                Street View ({activities().length} activities)
+              </span>
+            ) : (
+              <span style={{ color: '#60a5fa', 'margin-left': '10px' }}>
+                City View (zoom in for activities)
+              </span>
+            )}
+          </Show>
         </div>
       </div>
       
@@ -849,12 +897,21 @@ export function ActivityView(props) {
       <Show when={mapZoom() >= 17 && !selectedActivity()}>
         <div style={{
           position: 'absolute',
-          right: '20px',
-          top: '80px',
-          bottom: '80px',
-          width: '350px',
+          ...(window.innerWidth <= 768 ? {
+            bottom: '0',
+            left: '0',
+            right: '0',
+            height: '40vh',
+            'border-radius': '15px 15px 0 0',
+            'z-index': 200
+          } : {
+            right: '20px',
+            top: '80px',
+            bottom: '80px',
+            width: '350px',
+            'border-radius': '15px'
+          }),
           background: 'rgba(255, 255, 255, 0.95)',
-          'border-radius': '15px',
           'backdrop-filter': 'blur(10px)',
           'box-shadow': '0 4px 30px rgba(0, 0, 0, 0.1)',
           overflow: 'hidden',
@@ -1233,23 +1290,113 @@ export function ActivityView(props) {
         </div>
       </Show>
       
-      {/* Navigation Help */}
-      <div style={{
-        position: 'absolute',
-        bottom: '80px',
-        left: '20px',
-        background: 'rgba(0, 0, 0, 0.7)',
-        color: 'white',
-        padding: '10px',
-        'border-radius': '10px',
-        'font-size': '12px',
-        opacity: 0.7
-      }}>
-        <div>🖱️ Drag to explore</div>
-        <div>🔍 Scroll to zoom</div>
-        <div>⌨️ +/- keys to zoom</div>
-        <div>/ Search places</div>
-      </div>
+      {/* Navigation Help - Desktop Only */}
+      <Show when={window.innerWidth > 768}>
+        <div style={{
+          position: 'absolute',
+          bottom: '80px',
+          left: '20px',
+          background: 'rgba(0, 0, 0, 0.7)',
+          color: 'white',
+          padding: '10px',
+          'border-radius': '10px',
+          'font-size': '12px',
+          opacity: 0.7
+        }}>
+          <div>🖱️ Drag to explore</div>
+          <div>🔍 Scroll to zoom</div>
+          <div>⌨️ +/- keys to zoom</div>
+          <div>/ Search places</div>
+        </div>
+      </Show>
+      
+      {/* Mobile Bottom Bar */}
+      <Show when={window.innerWidth <= 768 && !selectedActivity()}>
+        <div style={{
+          position: 'absolute',
+          bottom: mapZoom() >= 17 ? '40vh' : '0',
+          left: '0',
+          right: '0',
+          background: 'rgba(255, 255, 255, 0.95)',
+          'backdrop-filter': 'blur(10px)',
+          padding: '12px',
+          display: 'flex',
+          'justify-content': 'space-around',
+          'align-items': 'center',
+          'border-top': '1px solid rgba(0, 0, 0, 0.1)',
+          'z-index': 150
+        }}>
+          <button
+            onClick={() => {
+              setTargetZoom(prev => Math.max(mapService.minZoom, prev - 1));
+              animateZoomToCenter();
+            }}
+            style={{
+              background: 'rgba(0, 0, 0, 0.1)',
+              border: 'none',
+              'border-radius': '50%',
+              width: '40px',
+              height: '40px',
+              display: 'flex',
+              'align-items': 'center',
+              'justify-content': 'center',
+              'font-size': '20px',
+              cursor: 'pointer'
+            }}
+          >
+            ➖
+          </button>
+          
+          <span style={{
+            'font-size': '14px',
+            'font-weight': '500'
+          }}>
+            Zoom: {mapZoom().toFixed(1)}
+          </span>
+          
+          <button
+            onClick={() => {
+              setTargetZoom(prev => Math.min(mapService.maxZoom, prev + 1));
+              animateZoomToCenter();
+            }}
+            style={{
+              background: 'rgba(0, 0, 0, 0.1)',
+              border: 'none',
+              'border-radius': '50%',
+              width: '40px',
+              height: '40px',
+              display: 'flex',
+              'align-items': 'center',
+              'justify-content': 'center',
+              'font-size': '20px',
+              cursor: 'pointer'
+            }}
+          >
+            ➕
+          </button>
+          
+          <button
+            onClick={async () => {
+              await getUserLocation();
+            }}
+            style={{
+              background: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              'border-radius': '20px',
+              padding: '8px 16px',
+              display: 'flex',
+              'align-items': 'center',
+              gap: '6px',
+              'font-size': '14px',
+              'font-weight': '500',
+              cursor: 'pointer'
+            }}
+          >
+            📍 My Location
+          </button>
+        </div>
+      </Show>
       
       {/* Style tag */}
       <style>{`

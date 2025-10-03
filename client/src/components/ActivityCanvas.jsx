@@ -883,17 +883,25 @@ export function ActivityCanvas(props) {
           {/* Close Button */}
           <button
             onClick={props.onClose}
-            style={modernStyles.closeButton}
+            style={{
+              ...modernStyles.closeButton,
+              padding: isMobile ? '12px' : '10px',
+              background: isMobile ? 'rgba(239, 68, 68, 0.8)' : 'rgba(55, 65, 81, 0.5)'
+            }}
             onMouseEnter={(e) => {
-              e.target.style.background = 'rgba(239, 68, 68, 0.2)';
-              e.target.style.color = 'rgba(248, 113, 113, 1)';
+              if (!isMobile) {
+                e.target.style.background = 'rgba(239, 68, 68, 0.2)';
+                e.target.style.color = 'rgba(248, 113, 113, 1)';
+              }
             }}
             onMouseLeave={(e) => {
-              e.target.style.background = 'rgba(55, 65, 81, 0.5)';
-              e.target.style.color = 'rgba(209, 213, 219, 1)';
+              if (!isMobile) {
+                e.target.style.background = 'rgba(55, 65, 81, 0.5)';
+                e.target.style.color = 'rgba(209, 213, 219, 1)';
+              }
             }}
           >
-            <svg style={{ width: '20px', height: '20px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg style={{ width: isMobile ? '24px' : '20px', height: isMobile ? '24px' : '20px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
             </svg>
           </button>
