@@ -381,6 +381,14 @@ export function ActivityCanvas(props) {
     }
   }
   
+  function handleMouseMove(e) {
+    handlePointerMove(e);
+  }
+  
+  function handleTouchMove(e) {
+    handlePointerMove(e);
+  }
+  
   function handleMouseUp() {
     if (isDrawing()) {
       // Send end event with path info
@@ -687,6 +695,9 @@ export function ActivityCanvas(props) {
     renderCanvas();
   });
   
+  // Check if mobile device
+  const isMobile = window.innerWidth <= 768;
+  
   const modernStyles = {
     container: {
       position: 'fixed',
@@ -702,22 +713,24 @@ export function ActivityCanvas(props) {
       display: 'flex',
       'align-items': 'center',
       'justify-content': 'space-between',
-      padding: '16px 24px',
+      padding: isMobile ? '12px 16px' : '16px 24px',
       background: 'rgba(31, 41, 55, 0.5)',
       'backdrop-filter': 'blur(10px)',
-      'border-bottom': '1px solid rgba(75, 85, 99, 1)'
+      'border-bottom': '1px solid rgba(75, 85, 99, 1)',
+      'flex-shrink': 0
     },
     mainContent: {
       flex: 1,
       display: 'flex',
-      padding: '16px 24px',
-      gap: '16px',
-      'min-height': 0
+      padding: isMobile ? '8px' : '16px 24px',
+      gap: isMobile ? '8px' : '16px',
+      'min-height': 0,
+      'overflow': 'hidden'
     },
     canvasContainer: {
       flex: 1,
       background: 'white',
-      'border-radius': '12px',
+      'border-radius': isMobile ? '8px' : '12px',
       'box-shadow': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
       overflow: 'hidden',
       position: 'relative'
@@ -767,7 +780,7 @@ export function ActivityCanvas(props) {
           <div>
             <h2 style={{ 
               margin: 0, 
-              'font-size': '20px', 
+              'font-size': isMobile ? '16px' : '20px', 
               'font-weight': '600',
               color: 'white' 
             }}>
@@ -775,9 +788,9 @@ export function ActivityCanvas(props) {
             </h2>
             <p style={{ 
               margin: '4px 0 0 0', 
-              'font-size': '14px',
+              'font-size': isMobile ? '12px' : '14px',
               color: 'rgba(156, 163, 175, 1)',
-              display: 'flex',
+              display: isMobile ? 'none' : 'flex',
               'align-items': 'center',
               gap: '8px'
             }}>
@@ -787,7 +800,37 @@ export function ActivityCanvas(props) {
           </div>
         </div>
         
-        <div style={{ display: 'flex', 'align-items': 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', 'align-items': 'center', gap: isMobile ? '8px' : '12px' }}>
+          {/* Mobile contribution requests notification */}
+          <Show when={isMobile && props.wsManager?.userHash === props.activity?.ownerId && contributionRequests().length > 0}>
+            <button
+              onClick={() => {
+                // Show mobile modal with requests
+                contributionRequests().forEach(request => {
+                  if (confirm(`Approve contribution request from User ${request.clientId?.slice(-4)}?`)) {
+                    props.wsManager.send({
+                      type: 'approveContributor',
+                      activityId: props.activity.id,
+                      userHash: request.userHash
+                    });
+                    setContributionRequests(prev =>
+                      prev.filter(r => r.userHash !== request.userHash)
+                    );
+                  }
+                });
+              }}
+              style={{
+                ...modernStyles.participantsButton,
+                background: 'rgba(239, 68, 68, 0.8)'
+              }}
+            >
+              📋
+              <span style={modernStyles.badge}>
+                {contributionRequests().length}
+              </span>
+            </button>
+          </Show>
+          
           {/* Participants Button */}
           <button
             onClick={() => setShowParticipants(!showParticipants())}
@@ -855,6 +898,9 @@ export function ActivityCanvas(props) {
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
           />
           
           {/* Canvas Overlays */}
@@ -1004,10 +1050,89 @@ export function ActivityCanvas(props) {
               setSelectMode(false);
             }}
           />
+          
+          {/* Mobile Color Picker - Always visible at bottom */}
+          <Show when={isMobile && canContribute()}>
+            <div style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              background: 'rgba(31, 41, 55, 0.95)',
+              'backdrop-filter': 'blur(10px)',
+              padding: '12px',
+              display: 'flex',
+              'align-items': 'center',
+              'justify-content': 'center',
+              gap: '8px',
+              'border-top': '1px solid rgba(75, 85, 99, 0.5)',
+              'z-index': 10
+            }}>
+              {/* Color palette */}
+              <div style={{
+                display: 'flex',
+                gap: '6px',
+                'align-items': 'center',
+                'flex-wrap': 'wrap',
+                'justify-content': 'center'
+              }}>
+                {['#000000', '#ef4444', '#f97316', '#fbbf24', '#22c55e', '#14b8a6', '#3b82f6', '#8b5cf6', '#ec4899'].map(color => (
+                  <button
+                    onClick={() => props.setColor && props.setColor(color)}
+                    style={{
+                      width: '28px',
+                      height: '28px',
+                      'border-radius': '50%',
+                      background: color,
+                      border: props.color === color ? '3px solid white' : '2px solid rgba(255, 255, 255, 0.2)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      transform: props.color === color ? 'scale(1.2)' : 'scale(1)'
+                    }}
+                  />
+                ))}
+              </div>
+              
+              {/* Brush size */}
+              <div style={{
+                display: 'flex',
+                'align-items': 'center',
+                gap: '8px',
+                'margin-left': '12px'
+              }}>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  'border-radius': '50%',
+                  background: props.color || '#000000'
+                }} />
+                <input
+                  type="range"
+                  min="1"
+                  max="20"
+                  value={props.brushSize || 3}
+                  onInput={(e) => props.setBrushSize && props.setBrushSize(parseInt(e.target.value))}
+                  style={{
+                    width: '60px',
+                    height: '4px',
+                    background: 'rgba(255, 255, 255, 0.2)',
+                    outline: 'none',
+                    'border-radius': '2px'
+                  }}
+                />
+                <div style={{
+                  width: `${(props.brushSize || 3) * 1.5}px`,
+                  height: `${(props.brushSize || 3) * 1.5}px`,
+                  'border-radius': '50%',
+                  background: props.color || '#000000'
+                }} />
+              </div>
+            </div>
+          </Show>
         </div>
         
         {/* Contribution Requests Panel (Owners) */}
-        <Show when={props.wsManager?.userHash === props.activity?.ownerId && contributionRequests().length > 0}>
+        <Show when={!isMobile && props.wsManager?.userHash === props.activity?.ownerId && contributionRequests().length > 0}>
           <div style={{
             width: '320px',
             background: 'rgba(31, 41, 55, 0.5)',
@@ -1118,17 +1243,25 @@ export function ActivityCanvas(props) {
       <Show when={showParticipants()}>
         <div style={{
           position: 'fixed',
-          right: '16px',
-          top: '80px',
-          width: '320px',
-          'max-height': '384px',
+          ...(isMobile ? {
+            bottom: 0,
+            left: 0,
+            right: 0,
+            'max-height': '50vh',
+            'border-radius': '12px 12px 0 0'
+          } : {
+            right: '16px',
+            top: '80px',
+            width: '320px',
+            'max-height': '384px',
+            'border-radius': '12px'
+          }),
           background: 'rgba(31, 41, 55, 0.95)',
           'backdrop-filter': 'blur(10px)',
-          'border-radius': '12px',
           'box-shadow': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
           overflow: 'hidden',
-          animation: 'slideDown 0.3s ease-out',
-          'z-index': 10
+          animation: isMobile ? 'slideUp 0.3s ease-out' : 'slideDown 0.3s ease-out',
+          'z-index': 100
         }}>
           <div style={{
             padding: '16px',
@@ -1201,8 +1334,14 @@ export function ActivityCanvas(props) {
           to { opacity: 1; }
         }
         @keyframes slideUp {
-          from { transform: translateY(20px) translateX(-50%); opacity: 0; }
-          to { transform: translateY(0) translateX(-50%); opacity: 1; }
+          from { 
+            transform: ${isMobile ? 'translateY(100%)' : 'translateY(20px) translateX(-50%)'}; 
+            opacity: ${isMobile ? 1 : 0}; 
+          }
+          to { 
+            transform: ${isMobile ? 'translateY(0)' : 'translateY(0) translateX(-50%)'}; 
+            opacity: 1; 
+          }
         }
         @keyframes slideDown {
           from { transform: translateY(-20px); opacity: 0; }

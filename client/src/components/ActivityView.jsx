@@ -1107,6 +1107,8 @@ export function ActivityView(props) {
           wsManager={props.wsManager}
           color={props.color}
           brushSize={props.brushSize}
+          setColor={props.setColor}
+          setBrushSize={props.setBrushSize}
           onClose={() => {
             const activity = selectedActivity();
             setSelectedActivity(null);

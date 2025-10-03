@@ -2,8 +2,36 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Real-Time Collaborative Canvas - SolidJS + WebGL + WASM</title>
+    <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            touch-action: none;
+        }
+        
+        canvas {
+            touch-action: none;
+        }
+        
+        input[type="range"] {
+            -webkit-user-select: auto;
+            -moz-user-select: auto;
+            -ms-user-select: auto;
+            user-select: auto;
+        }
+    </style>
 </head>
 <body>
     <div id="root"></div>

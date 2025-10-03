@@ -84,13 +84,16 @@ export function MapView(props) {
         <ActivityView
           color={props.color()}
           brushSize={props.brushSize()}
+          setColor={props.setColor}
+          setBrushSize={props.setBrushSize}
           wsManager={props.wsManager()}
           connected={props.connected()}
         />
       </div>
       
-      {/* Bottom Toolbar */}
-      <div style={{
+      {/* Bottom Toolbar - Desktop Only */}
+      <Show when={window.innerWidth > 768}>
+        <div style={{
         position: 'absolute',
         bottom: '20px',
         left: '50%',
@@ -153,6 +156,7 @@ export function MapView(props) {
           }} />
         </div>
       </div>
+      </Show>
     </>
   );
 }
