@@ -422,6 +422,10 @@ connectionManager.on('connection', async (ws, req) => {
           handleDeleteActivity(clientId, message);
           break;
           
+        case 'getAllActivities':
+          handleGetAllActivities(clientId, message);
+          break;
+          
         case 'removeUserDrawing':
           handleRemoveUserDrawing(clientId, message);
           break;
@@ -1819,6 +1823,29 @@ async function handleApproveContributor(clientId, message) {
     
   } catch (error) {
     console.error('Failed to approve contributor:', error);
+  }
+}
+
+// Get all activities (for list view)
+async function handleGetAllActivities(clientId, message) {
+  const client = clients.get(clientId);
+  if (!client) return;
+  
+  try {
+    // Get all activities without bounds restriction
+    const activities = await activityPersistence.getAllActivities();
+    console.log(`[AllActivities] Found ${activities.length} total activities`);
+    
+    client.ws.send(JSON.stringify({
+      type: 'allActivities',
+      activities
+    }));
+  } catch (error) {
+    console.error('Failed to get all activities:', error);
+    client.ws.send(JSON.stringify({
+      type: 'error',
+      message: 'Failed to get activities'
+    }));
   }
 }
 

@@ -490,6 +490,48 @@ export class ActivityPersistence {
     }
   }
   
+  // Get all activities (no bounds restriction)
+  async getAllActivities() {
+    if (!this.redis) return [];
+    
+    try {
+      const activities = [];
+      const keys = await this.redis.keys(`${this.keyPrefix}*`);
+      console.log(`[getAllActivities] Found ${keys.length} total keys`);
+      
+      for (const key of keys) {
+        // Skip non-activity keys
+        if (key.includes(':canvas:') || key.includes(':default:') || 
+            key.includes(':geo:') || key.includes(':street:')) {
+          continue;
+        }
+        
+        // Check if it's a proper activity key
+        const activityIdMatch = key.match(/^activity:([^:]+)$/);
+        if (!activityIdMatch) continue;
+        
+        try {
+          const activityData = await this.redis.get(key);
+          if (activityData) {
+            const activity = JSON.parse(activityData);
+            activities.push(activity);
+          }
+        } catch (err) {
+          console.log(`[getAllActivities] Skipping invalid key: ${key}`);
+          continue;
+        }
+      }
+      
+      console.log(`[getAllActivities] Found ${activities.length} total activities`);
+      // Sort by creation date, newest first
+      activities.sort((a, b) => b.createdAt - a.createdAt);
+      return activities;
+    } catch (error) {
+      console.error('Failed to get all activities:', error);
+      return [];
+    }
+  }
+  
   // Delete an activity (owner only)
   async deleteActivity(activityId, userHash) {
     if (!this.redis) return false;

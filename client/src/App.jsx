@@ -1,5 +1,7 @@
-import { createSignal, onMount, onCleanup, createEffect, For } from 'solid-js';
+import { createSignal, onMount, onCleanup, createEffect, For, Show } from 'solid-js';
+import { useNavigate, useLocation } from '@solidjs/router';
 import { ActivityView } from './components/ActivityView';
+import { CanvasList } from './components/CanvasList';
 import { WebSocketManager } from './lib/websocket';
 import { WasmProcessor } from './lib/wasm';
 import { config } from './config';
@@ -7,6 +9,9 @@ import { getUserColor, generateUsername, getContrastColor } from './utils/userCo
 import { inject } from '@vercel/analytics';
 
 function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
   // State management
   const [connected, setConnected] = createSignal(false);
   const [users, setUsers] = createSignal(new Map());
@@ -214,10 +219,31 @@ function App() {
             <span>👥 {users().size} Artists</span>
             <span>✏️ {operations()} Strokes</span>
           </div>
+          <button
+            onClick={() => navigate('/list')}
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              color: 'white',
+              padding: '5px 10px',
+              'border-radius': '6px',
+              cursor: 'pointer',
+              'font-size': '13px',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = 'rgba(255, 255, 255, 0.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = 'transparent';
+            }}
+          >
+            📋 List View
+          </button>
         </div>
       </header>
       
-      {/* Full Screen Activity View */}
+      {/* Routes */}
       <div style={{ 
         position: 'absolute',
         top: '50px',
@@ -226,16 +252,25 @@ function App() {
         bottom: 0,
         background: '#fafafa'
       }}>
-        <ActivityView
-          color={color()}
-          brushSize={brushSize()}
-          wsManager={wsManager()}
-          connected={connected()}
-        />
+        <Show when={location.pathname === '/list'}>
+          <CanvasList
+            wsManager={wsManager()}
+            connected={connected()}
+          />
+        </Show>
+        <Show when={location.pathname === '/'}>
+          <ActivityView
+            color={color()}
+            brushSize={brushSize()}
+            wsManager={wsManager()}
+            connected={connected()}
+          />
+        </Show>
       </div>
       
-      {/* Minimal Bottom Toolbar */}
-      <div style={{
+      {/* Minimal Bottom Toolbar - Only show on map view */}
+      <Show when={location.pathname === '/'}>
+        <div style={{
         position: 'absolute',
         bottom: '20px',
         left: '50%',
@@ -298,6 +333,7 @@ function App() {
           }} />
         </div>
       </div>
+      </Show>
     </div>
   );
 }

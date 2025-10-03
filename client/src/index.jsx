@@ -1,5 +1,10 @@
 import { render } from 'solid-js/web';
+import { Router } from '@solidjs/router';
 import App from './App';
 import './App.css';
 
-render(() => <App />, document.getElementById('root'));
+render(() => (
+  <Router>
+    <App />
+  </Router>
+), document.getElementById('root'));
