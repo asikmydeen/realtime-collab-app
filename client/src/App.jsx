@@ -7,14 +7,14 @@ import { WasmProcessor } from './lib/wasm';
 import { config } from './config';
 import { getUserColor, generateUsername } from './utils/userColors';
 import { inject } from '@vercel/analytics';
-import { authClient, useSession } from './lib/auth';
+import { authClient, useSession, getSessionToken } from './lib/auth';
 import { Auth } from './components/Auth';
 
 function App() {
   // Auth state
   const session = useSession();
   const [showAuth, setShowAuth] = createSignal(false);
-  
+
   // State management
   const [connected, setConnected] = createSignal(false);
   const [users, setUsers] = createSignal(new Map());
@@ -23,17 +23,17 @@ function App() {
   const [color, setColor] = createSignal('#000000');
   const [brushSize, setBrushSize] = createSignal(3);
   const [username, setUsername] = createSignal('');
-  
+
   // Performance metrics
   const [fps, setFps] = createSignal(60);
   const [operations, setOperations] = createSignal(0);
   const [latency, setLatency] = createSignal(0);
   const [networkLatency, setNetworkLatency] = createSignal(0);
-  
+
   // WebSocket and WASM managers
   const [wsManager, setWsManager] = createSignal(null);
   const [wasmProcessor, setWasmProcessor] = createSignal(null);
-  
+
   // Update username when session changes
   createEffect(() => {
     const currentSession = session();
@@ -43,28 +43,25 @@ function App() {
       setUsername(generateUsername());
     }
   });
-  
+
   onMount(async () => {
     // Initialize Vercel Analytics
     inject();
-    
+
     // Initialize WebAssembly
     const wasm = new WasmProcessor();
     await wasm.init();
     setWasmProcessor(wasm);
-    
+
     // Initialize WebSocket with auth token getter
     console.log('WebSocket URL from config:', config.wsUrl);
-    const ws = new WebSocketManager(config.wsUrl, () => {
-      const currentSession = session();
-      return currentSession?.token || null;
-    });
-    
+    const ws = new WebSocketManager(config.wsUrl, getSessionToken);
+
     ws.on('connected', () => {
       setConnected(true);
       ws.joinRoom('world', username());
     });
-    
+
     ws.on('welcome', (data) => {
       const userIndex = users().size;
       const userColor = getUserColor(userIndex);
@@ -83,11 +80,11 @@ function App() {
         return newUsers;
       });
     });
-    
+
     ws.on('disconnected', () => {
       setConnected(false);
     });
-    
+
     ws.on('userJoined', (data) => {
       const userIndex = users().size;
       const userColor = getUserColor(userIndex);
@@ -102,7 +99,7 @@ function App() {
         return newUsers;
       });
     });
-    
+
     ws.on('userLeft', (data) => {
       setUsers(prev => {
         const newUsers = new Map(prev);
@@ -110,11 +107,11 @@ function App() {
         return newUsers;
       });
     });
-    
+
     ws.on('latency', (value) => {
       setNetworkLatency(value);
     });
-    
+
     ws.on('init', (data) => {
       // Add existing users from the room
       if (data.users) {
@@ -135,43 +132,43 @@ function App() {
         });
       }
     });
-    
+
     // Set the WebSocket manager before connecting
     setWsManager(ws);
-    
+
     // Connect after setting up the manager
     ws.connect();
-    
+
     // Start FPS monitoring
     startFPSMonitor();
-    
+
     // Cleanup
     onCleanup(() => {
       if (ws) ws.disconnect();
     });
   });
-  
+
   function startFPSMonitor() {
     let frameCount = 0;
     let lastTime = performance.now();
-    
+
     const monitor = () => {
       frameCount++;
       const currentTime = performance.now();
       const delta = currentTime - lastTime;
-      
+
       if (delta >= 1000) {
         setFps(Math.round((frameCount * 1000) / delta));
         frameCount = 0;
         lastTime = currentTime;
       }
-      
+
       requestAnimationFrame(monitor);
     };
-    
+
     monitor();
   }
-  
+
   const handleDraw = (drawData) => {
     const ws = wsManager();
     if (ws && connected()) {
@@ -186,7 +183,7 @@ function App() {
 
   return (
     <>
-      <Route path="/" component={() => 
+      <Route path="/" component={() =>
         <MapView
           connected={connected}
           users={users}
@@ -198,7 +195,7 @@ function App() {
           wsManager={wsManager}
         />
       } />
-      <Route path="/list" component={() => 
+      <Route path="/list" component={() =>
         <ListView
           connected={connected}
           wsManager={wsManager}

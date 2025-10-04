@@ -18,7 +18,7 @@ import { GeoDrawingPersistence } from './geoDrawingPersistence.js';
 import { ActivityPersistence } from './activityPersistence.js';
 import { UserIdentityManager } from './userIdentity.js';
 import { initializeRedis } from './redisClient.js';
-import { authHandler } from './config/auth.config.js';
+import { authHandler, verifySession } from './config/auth.config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -206,29 +206,55 @@ connectionManager.on('connection', async (ws, req) => {
 
   console.log(`👤 New client connected: ${clientId} from ${clientIp}`);
 
-  // Check for userHash in URL
+  // Check for auth token or userHash in URL
   const url = new URL(req.url || '', `http://${req.headers.host}`);
+  const authToken = url.searchParams.get('token');
   const urlUserHash = url.searchParams.get('userHash');
 
   // Get or create user hash
   const clientInfo = { ip: clientIp, userAgent };
   let userHash;
+  let userId = null;
+  let userName = null;
+  let isAuthenticated = false;
 
-  if (urlUserHash) {
-    console.log(`[Auth] Client provided userHash in URL: ${urlUserHash}`);
-    // Verify it exists
-    const exists = await userIdentityManager.userHashExists(urlUserHash);
-    if (exists) {
-      userHash = urlUserHash;
-      console.log(`[Auth] Using authenticated hash: ${userHash}`);
-      await userIdentityManager.getUserIdentity(userHash);
-    } else {
-      console.log(`[Auth] Invalid userHash provided, generating new one`);
-      userHash = await userIdentityManager.getOrCreateUserHash(clientInfo);
+  // Try token-based auth first (Better Auth)
+  if (authToken) {
+    console.log(`[Auth] Client provided auth token`);
+    try {
+      const session = await verifySession(authToken);
+      if (session && session.user) {
+        userId = session.user.id;
+        userName = session.user.displayName || session.user.email?.split('@')[0] || 'User';
+        userHash = `auth_${userId}`; // Use auth-based hash
+        isAuthenticated = true;
+        console.log(`[Auth] Authenticated user: ${userName} (${userId})`);
+      } else {
+        console.log(`[Auth] Invalid token, falling back to userHash`);
+      }
+    } catch (error) {
+      console.error('[Auth] Token verification error:', error);
     }
-  } else {
-    userHash = await userIdentityManager.getOrCreateUserHash(clientInfo);
-    console.log(`[Auth] Generated new user hash for ${clientId}: ${userHash}`);
+  }
+
+  // Fall back to legacy userHash system
+  if (!isAuthenticated) {
+    if (urlUserHash) {
+      console.log(`[Auth] Client provided userHash in URL: ${urlUserHash}`);
+      // Verify it exists
+      const exists = await userIdentityManager.userHashExists(urlUserHash);
+      if (exists) {
+        userHash = urlUserHash;
+        console.log(`[Auth] Using authenticated hash: ${userHash}`);
+        await userIdentityManager.getUserIdentity(userHash);
+      } else {
+        console.log(`[Auth] Invalid userHash provided, generating new one`);
+        userHash = await userIdentityManager.getOrCreateUserHash(clientInfo);
+      }
+    } else {
+      userHash = await userIdentityManager.getOrCreateUserHash(clientInfo);
+      console.log(`[Auth] Generated new user hash for ${clientId}: ${userHash}`);
+    }
   }
 
   // Store client
@@ -238,6 +264,9 @@ connectionManager.on('connection', async (ws, req) => {
     room: null,
     lastPing: Date.now(),
     userHash, // Persistent user identifier
+    userId, // Real user ID from Better Auth (if authenticated)
+    userName, // Display name from Better Auth
+    isAuthenticated, // Whether user is authenticated via Better Auth
     location: null
   });
 
@@ -246,6 +275,9 @@ connectionManager.on('connection', async (ws, req) => {
     type: 'welcome',
     clientId,
     userHash, // Send user hash to client for persistent identity
+    userId, // Send real user ID if authenticated
+    userName, // Send display name if authenticated
+    isAuthenticated, // Let client know if they're authenticated
     serverTime: Date.now(),
     stats: {
       totalClients: clients.size,

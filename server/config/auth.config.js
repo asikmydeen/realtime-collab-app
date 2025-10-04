@@ -17,17 +17,17 @@ export const auth = betterAuth({
   database: db,
   baseURL: process.env.AUTH_BASE_URL || 'http://localhost:8080',
   secret: authSecret,
-  
+
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false
   },
-  
+
   session: {
     expiresIn: 60 * 60 * 24 * 30, // 30 days
     cookieName: 'world-art-session'
   },
-  
+
   user: {
     additionalFields: {
       displayName: {
@@ -36,10 +36,27 @@ export const auth = betterAuth({
         defaultValue: (user) => user.email ? user.email.split('@')[0] : 'Anonymous'
       }
     }
-  }
+  },
+
+  trustedOrigins: [
+    process.env.CLIENT_URL || 'http://localhost:3000',
+    'http://localhost:5173', // Vite dev server
+    'https://realtime-collab-app.vercel.app'
+  ]
 });
 
 // Export auth handlers for Express
 export const authHandler = async (req, res) => {
   return auth.handler(req, res);
+};
+
+// Helper to verify session token
+export const verifySession = async (token) => {
+  try {
+    const session = await auth.api.getSession({ headers: { authorization: `Bearer ${token}` } });
+    return session;
+  } catch (error) {
+    console.error('[Auth] Session verification failed:', error);
+    return null;
+  }
 };
