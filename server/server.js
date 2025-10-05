@@ -49,8 +49,15 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '50mb' }));
 
-// Auth routes
-app.all('/api/auth/*', authHandler);
+// Auth routes - wrap in try-catch to prevent crashes
+app.all('/api/auth/*', async (req, res) => {
+  try {
+    await authHandler(req, res);
+  } catch (error) {
+    console.error('[Auth] Handler error:', error);
+    res.status(500).json({ error: 'Authentication service unavailable' });
+  }
+});
 
 // Initialize Redis
 const redis = await initializeRedis();

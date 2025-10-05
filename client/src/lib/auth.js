@@ -11,13 +11,13 @@ export const authClient = createAuthClient({
 const [sessionData, setSessionData] = createSignal(null);
 const [isLoading, setIsLoading] = createSignal(true);
 
-// Check session on load
+// Check session on load - silently fail if auth service is unavailable
 authClient.getSession().then(session => {
   console.log('[Auth] Session loaded:', session);
   setSessionData(session);
   setIsLoading(false);
 }).catch((error) => {
-  console.error('[Auth] Failed to load session:', error);
+  console.warn('[Auth] Auth service unavailable, continuing without authentication:', error.message);
   setSessionData(null);
   setIsLoading(false);
 });
