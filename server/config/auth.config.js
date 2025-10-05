@@ -84,7 +84,49 @@ export const authHandler = async (req, res) => {
       message: 'Auth is disabled or not initialized'
     });
   }
-  return auth.handler(req, res);
+
+  try {
+    // Better Auth expects a Web Request, but we're using Express
+    // We need to construct the full URL from the request
+    const protocol = req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http');
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    const url = `${protocol}://${host}${req.originalUrl || req.url}`;
+
+    console.log('[Auth] Processing request:', {
+      method: req.method,
+      url: url,
+      headers: {
+        host: req.headers.host,
+        'x-forwarded-host': req.headers['x-forwarded-host'],
+        'x-forwarded-proto': req.headers['x-forwarded-proto']
+      }
+    });
+
+    // Create a Web Request object
+    const webRequest = new Request(url, {
+      method: req.method,
+      headers: req.headers,
+      body: req.method !== 'GET' && req.method !== 'HEAD' ? JSON.stringify(req.body) : undefined
+    });
+
+    // Call Better Auth handler
+    const response = await auth.handler(webRequest);
+
+    // Convert Web Response to Express response
+    res.status(response.status);
+
+    // Copy headers
+    response.headers.forEach((value, key) => {
+      res.setHeader(key, value);
+    });
+
+    // Send body
+    const body = await response.text();
+    res.send(body);
+  } catch (error) {
+    console.error('[Auth] Handler error:', error);
+    throw error;
+  }
 };
 
 // Helper to verify session token
