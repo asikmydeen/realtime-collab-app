@@ -12,10 +12,20 @@ const authSecret = process.env.AUTH_SECRET || crypto.randomBytes(32).toString('h
 // Use SQLite for auth data (Better Auth works best with SQL databases)
 const db = new Database(join(__dirname, '..', 'auth.db'));
 
+// Determine base URL from environment
+const getBaseURL = () => {
+  if (process.env.AUTH_BASE_URL) {
+    return process.env.AUTH_BASE_URL;
+  }
+  // Default to localhost with the correct port
+  const port = process.env.PORT || 3001;
+  return `http://localhost:${port}`;
+};
+
 // Create Better Auth instance
 export const auth = betterAuth({
   database: db,
-  baseURL: process.env.AUTH_BASE_URL || 'http://localhost:8080',
+  baseURL: getBaseURL(),
   secret: authSecret,
 
   emailAndPassword: {
@@ -41,7 +51,8 @@ export const auth = betterAuth({
   trustedOrigins: [
     process.env.CLIENT_URL || 'http://localhost:3000',
     'http://localhost:5173', // Vite dev server
-    'https://realtime-collab-app.vercel.app'
+    'https://realtime-collab-app.vercel.app',
+    'https://www.alamuna.art' // Production domain
   ]
 });
 
