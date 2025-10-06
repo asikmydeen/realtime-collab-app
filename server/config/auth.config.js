@@ -106,7 +106,7 @@ export const authHandler = async (req, res) => {
     const webRequest = new Request(url, {
       method: req.method,
       headers: req.headers,
-      body: req.method !== 'GET' && req.method !== 'HEAD' ? JSON.stringify(req.body) : undefined
+      body: req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS' ? JSON.stringify(req.body) : undefined
     });
 
     // Call Better Auth handler

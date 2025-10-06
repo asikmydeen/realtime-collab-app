@@ -16,6 +16,11 @@ function App() {
   const session = useSession();
   const [showAuth, setShowAuth] = createSignal(false);
 
+  // Debug: Watch showAuth changes
+  createEffect(() => {
+    console.log('showAuth changed:', showAuth());
+  });
+
   // State management
   const [connected, setConnected] = createSignal(false);
   const [users, setUsers] = createSignal(new Map());
@@ -194,6 +199,7 @@ function App() {
 
   return (
     <>
+      {/* Routes */}
       <Route path="/" component={() =>
         <MapView
           connected={connected}
@@ -206,7 +212,10 @@ function App() {
           wsManager={wsManager}
           session={session}
           currentUser={currentUser}
-          onShowAuth={() => setShowAuth(true)}
+          onShowAuth={() => {
+            console.log('onShowAuth called, setting showAuth to true');
+            setShowAuth(true);
+          }}
           onSignOut={handleSignOut}
         />
       } />
@@ -217,26 +226,39 @@ function App() {
         />
       } />
 
-      {/* Auth Modal */}
-      <Show when={showAuth()}>
-        <Auth
-          onSuccess={() => {
-            setShowAuth(false);
-            // Reconnect WebSocket with new auth token
-            const ws = wsManager();
-            if (ws) {
-              ws.disconnect();
-              setTimeout(() => ws.connect(), 100);
-            }
-          }}
-          onClose={() => setShowAuth(false)}
-        />
+      {/* Auth Modal - Outside routes so it's always available */}
+      <Show
+        when={showAuth()}
+      >
+        {() => {
+          console.log('Auth modal is being rendered!');
+          return (
+            <Auth
+              onSuccess={() => {
+                setShowAuth(false);
+                // Reconnect WebSocket with new auth token
+                const ws = wsManager();
+                if (ws) {
+                  ws.disconnect();
+                  setTimeout(() => ws.connect(), 100);
+                }
+              }}
+              onClose={() => {
+                console.log('Auth modal close clicked');
+                setShowAuth(false);
+              }}
+            />
+          );
+        }}
       </Show>
 
-      {/* Account Creation Prompt */}
+      {/* Account Creation Prompt - Outside routes so it's always available */}
       <AccountPrompt
         isAuthenticated={!!session()?.user}
-        onCreateAccount={() => setShowAuth(true)}
+        onCreateAccount={() => {
+          console.log('AccountPrompt: Create account clicked');
+          setShowAuth(true);
+        }}
       />
     </>
   );

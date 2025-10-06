@@ -1,4 +1,5 @@
 import { createSignal, Show } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { authClient } from '../lib/auth';
 
 export function Auth(props) {
@@ -53,26 +54,27 @@ export function Auth(props) {
   };
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(0, 0, 0, 0.8)',
-        display: 'flex',
-        'align-items': 'center',
-        'justify-content': 'center',
-        'z-index': 9999
-      }}
-      onClick={(e) => {
-        // Close modal when clicking backdrop
-        if (e.target === e.currentTarget) {
-          props.onClose?.();
-        }
-      }}
-    >
+    <Portal>
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.8)',
+          display: 'flex',
+          'align-items': 'center',
+          'justify-content': 'center',
+          'z-index': 99999
+        }}
+        onClick={(e) => {
+          // Close modal when clicking backdrop
+          if (e.target === e.currentTarget) {
+            props.onClose?.();
+          }
+        }}
+      >
       <div style={{
         background: 'white',
         padding: '30px',
@@ -287,5 +289,6 @@ export function Auth(props) {
         </Show>
       </div>
     </div>
+    </Portal>
   );
 }

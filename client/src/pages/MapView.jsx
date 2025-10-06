@@ -6,6 +6,13 @@ export function MapView(props) {
   const navigate = useNavigate();
   const [showSearch, setShowSearch] = createSignal(false);
 
+  // Debug: Check props
+  console.log('MapView props:', {
+    hasSession: !!props.session,
+    sessionValue: props.session?.(),
+    hasOnShowAuth: !!props.onShowAuth
+  });
+
   return (
     <>
       {/* Header with navigation */}
@@ -45,7 +52,7 @@ export function MapView(props) {
         <div style={{ display: 'flex', 'align-items': 'center', gap: window.innerWidth <= 768 ? '8px' : '12px' }}>
           {/* User status */}
           <Show
-            when={props.session?.()?.user}
+            when={props.session && props.session()?.user}
             fallback={
               <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
                 <Show when={window.innerWidth > 768}>
@@ -57,7 +64,11 @@ export function MapView(props) {
                   </span>
                 </Show>
                 <button
-                  onClick={() => props.onShowAuth?.()}
+                  onClick={() => {
+                    console.log('Sign In button clicked');
+                    console.log('onShowAuth prop:', props.onShowAuth);
+                    props.onShowAuth?.();
+                  }}
                   style={{
                     background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                     border: 'none',
