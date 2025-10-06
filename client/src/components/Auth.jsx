@@ -21,7 +21,7 @@ export function Auth(props) {
           password: password(),
           name: displayName() || email().split('@')[0]
         });
-        
+
         if (result.error) {
           setError(result.error.message || 'Failed to sign up');
         } else {
@@ -37,7 +37,7 @@ export function Auth(props) {
           email: email(),
           password: password()
         });
-        
+
         if (result.error) {
           setError(result.error.message || 'Failed to sign in');
         } else {
@@ -53,26 +53,68 @@ export function Auth(props) {
   };
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0, 0, 0, 0.8)',
-      display: 'flex',
-      'align-items': 'center',
-      'justify-content': 'center',
-      'z-index': 9999
-    }}>
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.8)',
+        display: 'flex',
+        'align-items': 'center',
+        'justify-content': 'center',
+        'z-index': 9999
+      }}
+      onClick={(e) => {
+        // Close modal when clicking backdrop
+        if (e.target === e.currentTarget) {
+          props.onClose?.();
+        }
+      }}
+    >
       <div style={{
         background: 'white',
         padding: '30px',
         'border-radius': '12px',
         width: '90%',
         'max-width': '400px',
-        'box-shadow': '0 10px 40px rgba(0, 0, 0, 0.2)'
+        'box-shadow': '0 10px 40px rgba(0, 0, 0, 0.2)',
+        position: 'relative'
       }}>
+        {/* Close button */}
+        <button
+          onClick={() => props.onClose?.()}
+          style={{
+            position: 'absolute',
+            top: '15px',
+            right: '15px',
+            background: 'transparent',
+            border: 'none',
+            'font-size': '24px',
+            color: '#999',
+            cursor: 'pointer',
+            padding: '0',
+            width: '30px',
+            height: '30px',
+            display: 'flex',
+            'align-items': 'center',
+            'justify-content': 'center',
+            'border-radius': '50%',
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.background = '#f0f0f0';
+            e.target.style.color = '#333';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.background = 'transparent';
+            e.target.style.color = '#999';
+          }}
+        >
+          ×
+        </button>
+
         <h2 style={{
           margin: '0 0 20px 0',
           'font-size': '24px',

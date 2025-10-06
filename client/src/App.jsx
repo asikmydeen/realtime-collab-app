@@ -9,6 +9,7 @@ import { getUserColor, generateUsername } from './utils/userColors';
 import { inject } from '@vercel/analytics';
 import { authClient, useSession, getSessionToken } from './lib/auth';
 import { Auth } from './components/Auth';
+import { AccountPrompt } from './components/AccountPrompt';
 
 function App() {
   // Auth state
@@ -181,6 +182,16 @@ function App() {
     }
   };
 
+  const handleSignOut = async () => {
+    try {
+      await authClient.signOut();
+      // Reload to reset to anonymous mode
+      window.location.reload();
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
+  };
+
   return (
     <>
       <Route path="/" component={() =>
@@ -193,6 +204,10 @@ function App() {
           brushSize={brushSize}
           setBrushSize={setBrushSize}
           wsManager={wsManager}
+          session={session}
+          currentUser={currentUser}
+          onShowAuth={() => setShowAuth(true)}
+          onSignOut={handleSignOut}
         />
       } />
       <Route path="/list" component={() =>
@@ -201,6 +216,28 @@ function App() {
           wsManager={wsManager}
         />
       } />
+
+      {/* Auth Modal */}
+      <Show when={showAuth()}>
+        <Auth
+          onSuccess={() => {
+            setShowAuth(false);
+            // Reconnect WebSocket with new auth token
+            const ws = wsManager();
+            if (ws) {
+              ws.disconnect();
+              setTimeout(() => ws.connect(), 100);
+            }
+          }}
+          onClose={() => setShowAuth(false)}
+        />
+      </Show>
+
+      {/* Account Creation Prompt */}
+      <AccountPrompt
+        isAuthenticated={!!session()?.user}
+        onCreateAccount={() => setShowAuth(true)}
+      />
     </>
   );
 }
