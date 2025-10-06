@@ -53,8 +53,7 @@ try {
         additionalFields: {
           displayName: {
             type: 'string',
-            required: false,
-            defaultValue: (user) => user.email ? user.email.split('@')[0] : 'Anonymous'
+            required: false
           }
         }
       },

@@ -19,7 +19,8 @@ db.exec(`
     name TEXT,
     createdAt INTEGER NOT NULL,
     updatedAt INTEGER NOT NULL,
-    image TEXT
+    image TEXT,
+    displayName TEXT
   );
 `);
 
@@ -90,4 +91,3 @@ db.close();
 
 console.log('[Migration] ✅ Database migration completed successfully!');
 console.log('[Migration] Database location:', join(__dirname, 'auth.db'));
-
