@@ -5,7 +5,7 @@ export function ActivityCanvas(props) {
   let canvasRef;
   let drawingCanvasRef;
   let containerRef;
-  
+
   // Canvas state
   const [isDrawing, setIsDrawing] = createSignal(false);
   const [paths, setPaths] = createSignal([]);
@@ -20,7 +20,7 @@ export function ActivityCanvas(props) {
   const [contributionRequests, setContributionRequests] = createSignal([]);
   const [showParticipants, setShowParticipants] = createSignal(false);
   const [showMobileRequests, setShowMobileRequests] = createSignal(false);
-  
+
   // Drawing state
   const drawingThrottle = {
     lastSendTime: 0,
@@ -28,30 +28,30 @@ export function ActivityCanvas(props) {
     pendingPoints: [],
     timeoutId: null
   };
-  
+
   // Helper function to check if a point is near a path
   function isPointNearPath(x, y, path, threshold = 10) {
     if (!path.points || path.points.length < 2) return false;
-    
+
     for (let i = 1; i < path.points.length; i++) {
       const p1 = path.points[i - 1];
       const p2 = path.points[i];
-      
+
       const A = x - p1.x;
       const B = y - p1.y;
       const C = p2.x - p1.x;
       const D = p2.y - p1.y;
-      
+
       const dot = A * C + B * D;
       const lenSq = C * C + D * D;
       let param = -1;
-      
+
       if (lenSq !== 0) {
         param = dot / lenSq;
       }
-      
+
       let xx, yy;
-      
+
       if (param < 0) {
         xx = p1.x;
         yy = p1.y;
@@ -62,59 +62,59 @@ export function ActivityCanvas(props) {
         xx = p1.x + param * C;
         yy = p1.y + param * D;
       }
-      
+
       const dx = x - xx;
       const dy = y - yy;
       const distance = Math.sqrt(dx * dx + dy * dy);
-      
+
       if (distance <= threshold) {
         return true;
       }
     }
-    
+
     return false;
   }
-  
+
   onMount(() => {
     // Setup canvas with proper timing
     requestAnimationFrame(() => {
       setupCanvas();
     });
-    
+
     if (props.activity) {
       console.log('[ActivityCanvas] Mounted with activity:', props.activity.id);
       setCanvasReady(true);
     }
-    
+
     // Handle window resize
     const handleResize = () => {
       setupCanvas();
     };
-    
+
     window.addEventListener('resize', handleResize);
-    
+
     // Create resize observer
     const resizeObserver = new ResizeObserver(() => {
       setupCanvas();
     });
-    
+
     if (containerRef) {
       resizeObserver.observe(containerRef);
     }
-    
+
     onCleanup(() => {
       window.removeEventListener('resize', handleResize);
       resizeObserver.disconnect();
     });
   });
-  
+
   function setupCanvas() {
     if (!canvasRef || !drawingCanvasRef || !containerRef) return;
-    
+
     const rect = containerRef.getBoundingClientRect();
     const width = Math.floor(rect.width);
     const height = Math.floor(rect.height);
-    
+
     if (width > 0 && height > 0) {
       canvasRef.width = width;
       canvasRef.height = height;
@@ -124,39 +124,39 @@ export function ActivityCanvas(props) {
       renderCanvas();
     }
   }
-  
+
   function renderCanvas() {
     if (!canvasRef || !drawingCanvasRef) {
       console.log('[ActivityCanvas] Canvas refs not ready');
       return;
     }
-    
+
     const ctx = canvasRef.getContext('2d');
     const drawCtx = drawingCanvasRef.getContext('2d');
-    
+
     console.log('[ActivityCanvas] Rendering canvas:', canvasRef.width, 'x', canvasRef.height);
-    
+
     // Clear canvases
     ctx.clearRect(0, 0, canvasRef.width, canvasRef.height);
     drawCtx.clearRect(0, 0, drawingCanvasRef.width, drawingCanvasRef.height);
-    
+
     // White background
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, canvasRef.width, canvasRef.height);
-    
+
     // Render drawings
     renderDrawings(drawCtx);
     ctx.drawImage(drawingCanvasRef, 0, 0);
   }
-  
+
   function renderDrawings(ctx) {
     const isOwner = props.wsManager?.userHash === props.activity?.ownerId;
-    
+
     // Render all completed paths
     paths().forEach(path => {
       if (path.points && path.points.length > 0) {
         ctx.beginPath();
-        
+
         // Highlight selected paths
         if (selectMode() && selectedPaths().has(path.pathId)) {
           ctx.strokeStyle = '#ef4444';
@@ -178,10 +178,10 @@ export function ActivityCanvas(props) {
           ctx.strokeStyle = path.color || '#000000';
           ctx.lineWidth = path.size || 3;
         }
-        
+
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        
+
         path.points.forEach((point, i) => {
           if (i === 0) {
             ctx.moveTo(point.x, point.y);
@@ -189,12 +189,12 @@ export function ActivityCanvas(props) {
             ctx.lineTo(point.x, point.y);
           }
         });
-        
+
         ctx.stroke();
         ctx.globalAlpha = 1; // Reset alpha
       }
     });
-    
+
     // Render active remote paths
     remotePaths().forEach((path) => {
       if (path.points && path.points.length > 0) {
@@ -203,7 +203,7 @@ export function ActivityCanvas(props) {
         ctx.lineWidth = path.size || 3;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        
+
         path.points.forEach((point, i) => {
           if (i === 0) {
             ctx.moveTo(point.x, point.y);
@@ -211,12 +211,12 @@ export function ActivityCanvas(props) {
             ctx.lineTo(point.x, point.y);
           }
         });
-        
+
         ctx.stroke();
       }
     });
   }
-  
+
   // Ensure canvas is setup when refs are ready
   createEffect(() => {
     if (canvasRef && drawingCanvasRef && containerRef) {
@@ -232,31 +232,31 @@ export function ActivityCanvas(props) {
       setCanContribute(false);
       return;
     }
-    
+
     // Owner can always contribute
     if (activity.ownerId === userHash) {
       console.log('[ActivityCanvas] User is owner, can contribute');
       setCanContribute(true);
       return;
     }
-    
+
     // Check if user is approved contributor
     const isApproved = activity.permissions?.approvedContributors?.includes(userHash);
     const isAllowed = activity.permissions?.allowContributions;
     console.log('[ActivityCanvas] User contribute status:', { userHash, isApproved, isAllowed });
     setCanContribute(isApproved || isAllowed);
   }
-  
+
   createEffect(() => {
     updateContributeStatus();
-    
+
     // Load contribution requests if owner
     if (props.activity && props.wsManager?.userHash === props.activity.ownerId) {
       const requests = props.activity.permissions?.contributorRequests || [];
       setContributionRequests(requests);
     }
   });
-  
+
   // Get coordinates from mouse or touch event
   function getCoordinates(e) {
     const rect = canvasRef.getBoundingClientRect();
@@ -271,26 +271,26 @@ export function ActivityCanvas(props) {
       y: e.clientY - rect.top
     };
   }
-  
+
   // Combined pointer down handler for mouse and touch
   function handlePointerDown(e) {
     e.preventDefault();
     const coords = getCoordinates(e);
-    
+
     if (selectMode()) {
       // In select mode, find the clicked path
       const { x, y } = coords;
-        
+
         // Only owners can select drawings
         const isOwner = props.wsManager?.userHash === props.activity?.ownerId;
         if (!isOwner) return;
-        
+
         // Find path under click (check in reverse order for top-most path)
         for (let i = paths().length - 1; i >= 0; i--) {
           const path = paths()[i];
           // Owners can only select others' paths, not their own
           if (path.userHash === props.wsManager?.userHash) continue;
-          
+
           if (isPointNearPath(x, y, path)) {
             setSelectedPaths(prev => {
               const next = new Set(prev);
@@ -307,9 +307,9 @@ export function ActivityCanvas(props) {
         }
       } else if (canContribute()) {
         setIsDrawing(true);
-        
+
         const { x, y } = coords;
-        
+
         // Start new path
         const pathId = `${props.wsManager?.clientId}_${Date.now()}`;
         const newPath = {
@@ -321,9 +321,9 @@ export function ActivityCanvas(props) {
           userHash: props.wsManager?.userHash,
           timestamp: Date.now()
         };
-        
+
         setPaths(prev => [...prev, newPath]);
-        
+
         // Send draw start
         sendThrottledDraw({
           drawType: 'start',
@@ -337,35 +337,35 @@ export function ActivityCanvas(props) {
         });
       }
     }
-  
+
   function handlePointerMove(e) {
     e.preventDefault();
     const coords = getCoordinates(e);
     const { x, y } = coords;
-    
+
     if (selectMode() && !isDrawing()) {
       // Only owners can hover/select in review mode
       const isOwner = props.wsManager?.userHash === props.activity?.ownerId;
       if (!isOwner) return;
-      
+
       let foundPath = null;
       for (let i = paths().length - 1; i >= 0; i--) {
         const path = paths()[i];
         // Only show others' contributions for review
         if (path.userHash === props.wsManager?.userHash) continue;
-        
+
         if (isPointNearPath(x, y, path)) {
           foundPath = path;
           break;
         }
       }
-      
+
       if (foundPath !== hoveredPath()) {
         setHoveredPath(foundPath);
         renderCanvas();
       }
     } else if (isDrawing()) {
-      
+
       // Add point to current path
       setPaths(prev => {
         const newPaths = [...prev];
@@ -375,7 +375,7 @@ export function ActivityCanvas(props) {
         }
         return newPaths;
       });
-      
+
       // Send draw update with current path info
       const currentPath = paths()[paths().length - 1];
       sendThrottledDraw({
@@ -385,16 +385,16 @@ export function ActivityCanvas(props) {
         pathId: currentPath?.pathId,
         userHash: props.wsManager?.userHash
       });
-      
+
       renderCanvas();
     }
   }
-  
+
   function handlePointerUp() {
     if (isDrawing()) {
       // Send end event with path info
       const currentPath = paths()[paths().length - 1];
-      sendThrottledDraw({ 
+      sendThrottledDraw({
         drawType: 'end',
         pathId: currentPath?.pathId,
         userHash: props.wsManager?.userHash,
@@ -403,69 +403,69 @@ export function ActivityCanvas(props) {
     }
     setIsDrawing(false);
   }
-  
+
   // Mouse specific handlers
   function handleMouseDown(e) {
     if (e.button === 0) {
       handlePointerDown(e);
     }
   }
-  
+
   function handleMouseMove(e) {
     handlePointerMove(e);
   }
-  
+
   function handleMouseUp() {
     handlePointerUp();
   }
-  
+
   // Touch handlers
   function handleTouchStart(e) {
     handlePointerDown(e);
   }
-  
+
   function handleTouchMove(e) {
     handlePointerMove(e);
   }
-  
+
   function handleTouchEnd(e) {
     e.preventDefault();
     handlePointerUp();
   }
-  
+
   // Send drawing data with throttling
   function sendThrottledDraw(drawData) {
     const now = Date.now();
-    
+
     if (drawData.drawType === 'start' || drawData.drawType === 'end') {
       // Send immediately for start/end
       if (drawingThrottle.timeoutId) {
         clearTimeout(drawingThrottle.timeoutId);
         drawingThrottle.timeoutId = null;
       }
-      
+
       if (drawingThrottle.pendingPoints.length > 0) {
         drawingThrottle.pendingPoints.forEach(point => {
           sendActivityDraw(point);
         });
         drawingThrottle.pendingPoints = [];
       }
-      
+
       sendActivityDraw(drawData);
       drawingThrottle.lastSendTime = now;
       return;
     }
-    
+
     // Throttle draw events
     drawingThrottle.pendingPoints.push(drawData);
-    
+
     if (now - drawingThrottle.lastSendTime >= drawingThrottle.throttleMs) {
       drawingThrottle.pendingPoints.forEach(point => {
         sendActivityDraw(point);
       });
       drawingThrottle.pendingPoints = [];
       drawingThrottle.lastSendTime = now;
-      
+
       if (drawingThrottle.timeoutId) {
         clearTimeout(drawingThrottle.timeoutId);
         drawingThrottle.timeoutId = null;
@@ -482,7 +482,7 @@ export function ActivityCanvas(props) {
       }, remainingTime);
     }
   }
-  
+
   function sendActivityDraw(data) {
     if (props.wsManager && props.activity) {
       console.log('[ActivityCanvas] Sending draw for activity:', props.activity.id, 'type:', data.drawType);
@@ -497,17 +497,17 @@ export function ActivityCanvas(props) {
       console.warn('[ActivityCanvas] Cannot send draw - missing wsManager or activity');
     }
   }
-  
+
   // Handle remote drawing
   function handleRemoteActivityDraw(data) {
     console.log('[ActivityCanvas] Received remote draw:', data.drawType, 'from client:', data.clientId);
-    
+
     // Skip if it's our own draw (shouldn't happen but just in case)
     if (props.wsManager && data.clientId === props.wsManager.clientId) {
       console.log('[ActivityCanvas] Skipping own draw message');
       return;
     }
-    
+
     switch(data.drawType) {
       case 'start':
         setRemotePaths(prev => {
@@ -520,7 +520,7 @@ export function ActivityCanvas(props) {
           return next;
         });
         break;
-        
+
       case 'draw':
         setRemotePaths(prev => {
           const next = new Map(prev);
@@ -537,14 +537,14 @@ export function ActivityCanvas(props) {
           return next;
         });
         break;
-        
+
       case 'end':
         setRemotePaths(prev => {
           const next = new Map(prev);
           const finishedPath = next.get(data.clientId);
           if (finishedPath && finishedPath.points.length > 1) {
             // Include all necessary path data
-            setPaths(paths => [...paths, { 
+            setPaths(paths => [...paths, {
               ...finishedPath,
               pathId: data.pathId,
               clientId: data.clientId,
@@ -557,11 +557,11 @@ export function ActivityCanvas(props) {
         });
         break;
     }
-    
+
     // Force immediate re-render
     requestAnimationFrame(() => renderCanvas());
   }
-  
+
   // WebSocket handlers
   createEffect(() => {
     if (props.wsManager) {
@@ -573,7 +573,7 @@ export function ActivityCanvas(props) {
           renderCanvas();
         }
         setCanvasReady(true);
-        
+
         // Update contribute status with fresh data
         if (data.activity) {
           // Update local activity reference if needed
@@ -586,7 +586,7 @@ export function ActivityCanvas(props) {
             console.log('[ActivityCanvas] Updated contribute status:', { isOwner, isApproved, isAllowed });
             setCanContribute(isOwner || isApproved || isAllowed);
           }
-          
+
           // If we have activity data with permissions, update contribution requests
           if (props.wsManager?.userHash === data.activity.ownerId) {
             const requests = data.activity.permissions?.contributorRequests || [];
@@ -595,11 +595,11 @@ export function ActivityCanvas(props) {
           }
         }
       });
-      
+
       const cleanup2 = props.wsManager.on('remoteActivityDraw', (data) => {
         handleRemoteActivityDraw(data);
       });
-      
+
       const cleanup3 = props.wsManager.on('participantJoined', (data) => {
         setParticipants(prev => {
           const next = new Map(prev);
@@ -607,7 +607,7 @@ export function ActivityCanvas(props) {
           return next;
         });
       });
-      
+
       const cleanup4 = props.wsManager.on('participantLeft', (data) => {
         setParticipants(prev => {
           const next = new Map(prev);
@@ -615,7 +615,7 @@ export function ActivityCanvas(props) {
           return next;
         });
       });
-      
+
       // Also handle defaultActivity response which includes canvas data
       const cleanup5 = props.wsManager.on('defaultActivity', (data) => {
         if (props.activity && props.activity.id === data.activity.id) {
@@ -627,7 +627,7 @@ export function ActivityCanvas(props) {
           setCanvasReady(true);
         }
       });
-      
+
       // Handle drawing removal
       const cleanup6 = props.wsManager.on('drawingRemoved', (data) => {
         console.log('[ActivityCanvas] Drawing removed:', data.pathId);
@@ -640,7 +640,7 @@ export function ActivityCanvas(props) {
         // Force re-render
         setTimeout(() => renderCanvas(), 0);
       });
-      
+
       // Handle contribution status
       const cleanup7 = props.wsManager.on('contributionStatus', (data) => {
         console.log('[ActivityCanvas] Contribution status:', data.status);
@@ -650,7 +650,7 @@ export function ActivityCanvas(props) {
           setRequestSent(false);
           // Show success message
           alert('Your contribution request has been approved! You can now draw.');
-          
+
           // Rejoin the activity to refresh permissions
           if (props.activity) {
             console.log('[ActivityCanvas] Rejoining activity to refresh permissions');
@@ -666,7 +666,7 @@ export function ActivityCanvas(props) {
           setRequestSent(false);
         }
       });
-      
+
       // Handle activity updates
       const cleanup8 = props.wsManager.on('activityUpdate', (data) => {
         if (data.activity && data.activity.id === props.activity?.id) {
@@ -674,13 +674,13 @@ export function ActivityCanvas(props) {
           updateContributeStatus();
         }
       });
-      
+
       // Handle welcome (re-authentication)
       const cleanup9 = props.wsManager.on('welcome', (data) => {
         console.log('[ActivityCanvas] Received welcome with userHash:', data.userHash);
         updateContributeStatus();
       });
-      
+
       // Handle contribution requests (for owners)
       const cleanup10 = props.wsManager.on('contributionRequest', (data) => {
         console.log('[ActivityCanvas] Received contribution request:', data);
@@ -688,18 +688,18 @@ export function ActivityCanvas(props) {
           setContributionRequests(prev => [...prev, data.requester]);
         }
       });
-      
+
       // Handle contributor approval (update owner's UI)
       const cleanup11 = props.wsManager.on('contributorApproved', (data) => {
         console.log('[ActivityCanvas] Contributor approved:', data);
         if (data.activityId === props.activity?.id) {
           // Remove from pending requests
-          setContributionRequests(prev => 
+          setContributionRequests(prev =>
             prev.filter(req => req.userHash !== data.userHash)
           );
         }
       });
-      
+
       onCleanup(() => {
         cleanup1();
         cleanup2();
@@ -718,16 +718,16 @@ export function ActivityCanvas(props) {
       });
     }
   });
-  
+
   // Re-render on remote path changes
   createEffect(() => {
     remotePaths();
     renderCanvas();
   });
-  
+
   // Check if mobile device
   const isMobile = window.innerWidth <= 768;
-  
+
   const modernStyles = {
     container: {
       position: 'fixed',
@@ -743,10 +743,11 @@ export function ActivityCanvas(props) {
       display: 'flex',
       'align-items': 'center',
       'justify-content': 'space-between',
-      padding: isMobile ? '12px 16px' : '16px 24px',
-      background: 'rgba(31, 41, 55, 0.5)',
+      padding: isMobile ? '14px 16px' : '18px 24px',
+      background: 'linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(17, 24, 39, 0.95) 100%)',
       'backdrop-filter': 'blur(10px)',
-      'border-bottom': '1px solid rgba(75, 85, 99, 1)',
+      'border-bottom': '2px solid rgba(59, 130, 246, 0.3)',
+      'box-shadow': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
       'flex-shrink': 0
     },
     mainContent: {
@@ -801,35 +802,55 @@ export function ActivityCanvas(props) {
       'font-weight': 'bold'
     }
   };
-  
+
   return (
     <div style={modernStyles.container}>
       {/* Header Bar */}
       <div style={modernStyles.header}>
-        <div style={{ display: 'flex', 'align-items': 'center', gap: '16px' }}>
-          <div>
-            <h2 style={{ 
-              margin: 0, 
-              'font-size': isMobile ? '16px' : '20px', 
-              'font-weight': '600',
-              color: 'white' 
-            }}>
-              {props.activity.title}
-            </h2>
-            <p style={{ 
-              margin: '4px 0 0 0', 
-              'font-size': isMobile ? '12px' : '14px',
-              color: 'rgba(156, 163, 175, 1)',
-              display: isMobile ? 'none' : 'flex',
+        <div style={{ display: 'flex', 'align-items': 'center', gap: '16px', flex: 1, 'min-width': 0 }}>
+          <div style={{ flex: 1, 'min-width': 0 }}>
+            <div style={{ display: 'flex', 'align-items': 'center', gap: '8px', 'margin-bottom': '4px' }}>
+              <h2 style={{
+                margin: 0,
+                'font-size': isMobile ? '18px' : '22px',
+                'font-weight': '700',
+                color: 'white',
+                'text-overflow': 'ellipsis',
+                overflow: 'hidden',
+                'white-space': 'nowrap'
+              }}>
+                🎨 {props.activity.title}
+              </h2>
+            </div>
+            <div style={{
+              display: 'flex',
               'align-items': 'center',
-              gap: '8px'
+              gap: '12px',
+              'flex-wrap': 'wrap',
+              'font-size': isMobile ? '11px' : '13px',
+              color: 'rgba(156, 163, 175, 1)'
             }}>
-              <span>📍</span>
-              <span>{props.activity.street}</span>
-            </p>
+              <span style={{ display: 'flex', 'align-items': 'center', gap: '4px' }}>
+                <span>📍</span>
+                <span style={{
+                  'text-overflow': 'ellipsis',
+                  overflow: 'hidden',
+                  'white-space': 'nowrap',
+                  'max-width': isMobile ? '120px' : '200px'
+                }}>
+                  {props.activity.street}
+                </span>
+              </span>
+              <Show when={props.activity.ownerName && props.activity.ownerName !== 'Anonymous'}>
+                <span style={{ display: 'flex', 'align-items': 'center', gap: '4px' }}>
+                  <span>👤</span>
+                  <span>by {props.activity.ownerName}</span>
+                </span>
+              </Show>
+            </div>
           </div>
         </div>
-        
+
         <div style={{ display: 'flex', 'align-items': 'center', gap: isMobile ? '8px' : '12px' }}>
           {/* Mobile contribution requests notification */}
           <Show when={isMobile && props.wsManager?.userHash === props.activity?.ownerId && contributionRequests().length > 0}>
@@ -857,7 +878,7 @@ export function ActivityCanvas(props) {
               </span>
             </button>
           </Show>
-          
+
           {/* Participants Button */}
           <button
             onClick={() => setShowParticipants(!showParticipants())}
@@ -877,7 +898,7 @@ export function ActivityCanvas(props) {
               {participants().size + 1}
             </span>
           </button>
-          
+
           {/* Close Button */}
           <button
             onClick={props.onClose}
@@ -905,14 +926,14 @@ export function ActivityCanvas(props) {
           </button>
         </div>
       </div>
-      
+
       {/* Main Content */}
       <div style={modernStyles.mainContent}>
         {/* Canvas Container */}
         <div ref={containerRef} style={modernStyles.canvasContainer}>
           <canvas
             ref={drawingCanvasRef}
-            style={{ 
+            style={{
               position: 'absolute',
               top: 0,
               left: 0,
@@ -937,7 +958,7 @@ export function ActivityCanvas(props) {
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           />
-          
+
           {/* Canvas Overlays */}
           {/* Contribution Request UI */}
           <Show when={!canContribute() && props.wsManager?.userHash !== props.activity?.ownerId}>
@@ -953,7 +974,7 @@ export function ActivityCanvas(props) {
               animation: 'slideUp 0.3s ease-out'
             }}>
               <div style={{ color: 'white', 'text-align': 'center' }}>
-                <div style={{ 
+                <div style={{
                   'margin-bottom': '12px',
                   display: 'flex',
                   'align-items': 'center',
@@ -1009,7 +1030,7 @@ export function ActivityCanvas(props) {
               </div>
             </div>
           </Show>
-          
+
           {/* Drawing Author Overlay */}
           <Show when={selectMode() && hoveredPath() && props.wsManager?.userHash === props.activity?.ownerId}>
             <div style={{
@@ -1023,14 +1044,14 @@ export function ActivityCanvas(props) {
               padding: '12px 24px',
               animation: 'slideUp 0.3s ease-out'
             }}>
-              <div style={{ 
+              <div style={{
                 display: 'flex',
                 'align-items': 'center',
                 gap: '16px',
                 color: 'white'
               }}>
                 <span>✏️ Contribution by:</span>
-                <span style={{ 
+                <span style={{
                   'font-weight': '600',
                   color: 'rgba(147, 197, 253, 1)'
                 }}>
@@ -1048,7 +1069,7 @@ export function ActivityCanvas(props) {
                     ✓ Selected for removal
                   </span>
                 ) : (
-                  <span style={{ 
+                  <span style={{
                     color: 'rgba(156, 163, 175, 1)',
                     'font-size': '14px'
                   }}>
@@ -1058,7 +1079,7 @@ export function ActivityCanvas(props) {
               </div>
             </div>
           </Show>
-          
+
           {/* Owner Controls */}
           <ActivityControls
             activity={props.activity}
@@ -1085,7 +1106,7 @@ export function ActivityCanvas(props) {
               setSelectMode(false);
             }}
           />
-          
+
           {/* Mobile Color Picker - Always visible at bottom */}
           <Show when={isMobile && canContribute()}>
             <div style={{
@@ -1127,7 +1148,7 @@ export function ActivityCanvas(props) {
                   />
                 ))}
               </div>
-              
+
               {/* Brush size */}
               <div style={{
                 display: 'flex',
@@ -1165,7 +1186,7 @@ export function ActivityCanvas(props) {
             </div>
           </Show>
         </div>
-        
+
         {/* Contribution Requests Panel (Owners) */}
         <Show when={!isMobile && props.wsManager?.userHash === props.activity?.ownerId && contributionRequests().length > 0}>
           <div style={{
@@ -1176,7 +1197,7 @@ export function ActivityCanvas(props) {
             padding: '16px',
             animation: 'slideDown 0.3s ease-out'
           }}>
-            <h4 style={{ 
+            <h4 style={{
               color: 'white',
               'font-weight': '600',
               margin: '0 0 16px 0',
@@ -1187,7 +1208,7 @@ export function ActivityCanvas(props) {
               <span>📋</span>
               <span>Contribution Requests ({contributionRequests().length})</span>
             </h4>
-            <div style={{ 
+            <div style={{
               display: 'flex',
               'flex-direction': 'column',
               gap: '8px',
@@ -1273,7 +1294,7 @@ export function ActivityCanvas(props) {
           </div>
         </Show>
       </div>
-      
+
       {/* Participants Sidebar */}
       <Show when={showParticipants()}>
         <div style={{
@@ -1302,7 +1323,7 @@ export function ActivityCanvas(props) {
             padding: '16px',
             'border-bottom': '1px solid rgba(75, 85, 99, 1)'
           }}>
-            <h3 style={{ 
+            <h3 style={{
               color: 'white',
               'font-weight': '600',
               margin: 0,
@@ -1361,7 +1382,7 @@ export function ActivityCanvas(props) {
           </div>
         </div>
       </Show>
-      
+
       {/* Mobile Contribution Requests Modal */}
       <Show when={showMobileRequests() && isMobile}>
         <div style={{
@@ -1407,7 +1428,7 @@ export function ActivityCanvas(props) {
                 ✕
               </button>
             </div>
-            
+
             <div style={{ display: 'flex', 'flex-direction': 'column', gap: '12px' }}>
               {contributionRequests().map(request => (
                 <div style={{
@@ -1490,7 +1511,7 @@ export function ActivityCanvas(props) {
           </div>
         </div>
       </Show>
-      
+
       {/* Add CSS animations */}
       <style>{`
         @keyframes fadeIn {
@@ -1498,13 +1519,13 @@ export function ActivityCanvas(props) {
           to { opacity: 1; }
         }
         @keyframes slideUp {
-          from { 
-            transform: ${isMobile ? 'translateY(100%)' : 'translateY(20px) translateX(-50%)'}; 
-            opacity: ${isMobile ? 1 : 0}; 
+          from {
+            transform: ${isMobile ? 'translateY(100%)' : 'translateY(20px) translateX(-50%)'};
+            opacity: ${isMobile ? 1 : 0};
           }
-          to { 
-            transform: ${isMobile ? 'translateY(0)' : 'translateY(0) translateX(-50%)'}; 
-            opacity: 1; 
+          to {
+            transform: ${isMobile ? 'translateY(0)' : 'translateY(0) translateX(-50%)'};
+            opacity: 1;
           }
         }
         @keyframes slideDown {
