@@ -24,34 +24,11 @@ console.log('[Auth] Database mode:', usePostgres ? 'PostgreSQL (Production)' : '
 console.log('[Auth] Environment:', process.env.NODE_ENV || 'development');
 
 if (usePostgres) {
-  try {
-    const { Pool } = pg;
-
-    // Validate DATABASE_URL format
-    if (!process.env.DATABASE_URL.startsWith('postgresql://')) {
-      throw new Error('DATABASE_URL must start with postgresql://');
-    }
-
-    db = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
-    });
-
-    console.log('[Auth] ✅ PostgreSQL pool created');
-    console.log('[Auth] Database URL:', process.env.DATABASE_URL?.replace(/:[^:@]+@/, ':****@')); // Hide password
-
-    // Test the connection
-    db.query('SELECT NOW()', (err, res) => {
-      if (err) {
-        console.error('[Auth] ❌ PostgreSQL connection test failed:', err.message);
-      } else {
-        console.log('[Auth] ✅ PostgreSQL connection test successful');
-      }
-    });
-  } catch (error) {
-    console.error('[Auth] ❌ Failed to initialize PostgreSQL database:', error.message);
-    console.error('[Auth] Error details:', error);
-  }
+  // For PostgreSQL, we'll pass the connection string directly to Better Auth
+  // Better Auth will create its own connection pool internally
+  console.log('[Auth] ✅ Using PostgreSQL');
+  console.log('[Auth] Database URL:', process.env.DATABASE_URL?.replace(/:[^:@]+@/, ':****@')); // Hide password
+  db = process.env.DATABASE_URL; // Just store the connection string
 } else {
   // Use SQLite for local development
   try {
@@ -77,10 +54,7 @@ const getBaseURL = () => {
 try {
   if (db) {
     const authConfig = {
-      database: usePostgres ? {
-        provider: 'postgres',
-        url: process.env.DATABASE_URL
-      } : db,
+      database: db, // Pass connection string for PostgreSQL or Database instance for SQLite
       baseURL: getBaseURL(),
       secret: authSecret,
 
@@ -120,6 +94,9 @@ try {
         generateId: () => crypto.randomBytes(16).toString('hex')
       }
     };
+
+    console.log('[Auth] 🔧 Creating Better Auth instance...');
+    console.log('[Auth] Database type:', usePostgres ? 'PostgreSQL (connection string)' : 'SQLite (instance)');
 
     auth = betterAuth(authConfig);
     authInitialized = true;
