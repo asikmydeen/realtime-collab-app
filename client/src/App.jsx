@@ -234,11 +234,14 @@ function App() {
           console.log('Auth modal is being rendered!');
           return (
             <Auth
-              onSuccess={() => {
+              onSuccess={async () => {
                 setShowAuth(false);
+                // Wait a bit for session to be fully updated
+                await new Promise(resolve => setTimeout(resolve, 500));
                 // Reconnect WebSocket with new auth token
                 const ws = wsManager();
                 if (ws) {
+                  console.log('[Auth] Reconnecting WebSocket with auth token');
                   ws.disconnect();
                   setTimeout(() => ws.connect(), 100);
                 }
