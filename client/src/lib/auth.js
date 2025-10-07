@@ -3,8 +3,13 @@ import { createSignal } from 'solid-js';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
+// Create auth client with localStorage for cross-origin support
 export const authClient = createAuthClient({
-  baseURL: API_URL
+  baseURL: API_URL,
+  // Use localStorage instead of cookies for cross-origin
+  fetchOptions: {
+    credentials: 'include'
+  }
 });
 
 // Simple auth store for SolidJS

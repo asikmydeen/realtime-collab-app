@@ -46,19 +46,10 @@ try {
 
       session: {
         expiresIn: 60 * 60 * 24 * 30, // 30 days
-        cookieName: 'world-art-session',
+        updateAge: 60 * 60 * 24, // Update session every 24 hours
         cookieCache: {
           enabled: true,
           maxAge: 60 * 5 // 5 minutes
-        }
-      },
-
-      advanced: {
-        cookieOptions: {
-          sameSite: 'none', // Required for cross-site cookies
-          secure: true,     // Required when sameSite=none
-          httpOnly: true,
-          path: '/'
         }
       },
 
@@ -76,7 +67,13 @@ try {
         'http://localhost:5173', // Vite dev server
         'https://realtime-collab-app.vercel.app',
         'https://www.alamuna.art' // Production domain
-      ]
+      ],
+
+      // Advanced options
+      advanced: {
+        useSecureCookies: process.env.NODE_ENV === 'production',
+        generateId: () => crypto.randomBytes(32).toString('hex')
+      }
     });
     authInitialized = true;
     console.log('[Auth] Better Auth initialized successfully');
@@ -127,9 +124,21 @@ export const authHandler = async (req, res) => {
     // Convert Web Response to Express response
     res.status(response.status);
 
-    // Copy headers
+    // Copy headers and modify Set-Cookie for cross-origin
     response.headers.forEach((value, key) => {
-      res.setHeader(key, value);
+      if (key.toLowerCase() === 'set-cookie') {
+        // Modify cookie to include SameSite=None and Secure
+        let modifiedCookie = value;
+        if (!modifiedCookie.includes('SameSite')) {
+          modifiedCookie += '; SameSite=None';
+        }
+        if (!modifiedCookie.includes('Secure')) {
+          modifiedCookie += '; Secure';
+        }
+        res.setHeader(key, modifiedCookie);
+      } else {
+        res.setHeader(key, value);
+      }
     });
 
     // Send body
