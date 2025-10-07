@@ -18,24 +18,27 @@ let authInitialized = false;
 // Check if PostgreSQL is configured (production)
 const usePostgres = !!process.env.DATABASE_URL;
 
+console.log('[Auth] Database mode:', usePostgres ? 'PostgreSQL (Production)' : 'SQLite (Local Dev)');
+
 if (usePostgres) {
   try {
     const { Pool } = pg;
     db = new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+      ssl: { rejectUnauthorized: false }
     });
-    console.log('[Auth] PostgreSQL database initialized');
+    console.log('[Auth] ✅ PostgreSQL database initialized');
+    console.log('[Auth] Database URL:', process.env.DATABASE_URL?.replace(/:[^:@]+@/, ':****@')); // Hide password
   } catch (error) {
-    console.error('[Auth] Failed to initialize PostgreSQL database:', error);
+    console.error('[Auth] ❌ Failed to initialize PostgreSQL database:', error);
   }
 } else {
   // Use SQLite for local development
   try {
     db = new Database(join(__dirname, '..', 'auth.db'));
-    console.log('[Auth] SQLite database initialized');
+    console.log('[Auth] ✅ SQLite database initialized (local dev)');
   } catch (error) {
-    console.error('[Auth] Failed to initialize SQLite database:', error);
+    console.error('[Auth] ❌ Failed to initialize SQLite database:', error);
   }
 }
 
