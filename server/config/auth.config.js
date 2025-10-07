@@ -1,6 +1,7 @@
 import { betterAuth } from 'better-auth';
 import Database from 'better-sqlite3';
-import pg from 'pg';
+import { Kysely, PostgresDialect } from 'kysely';
+import postgres from 'postgres';
 import crypto from 'crypto';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -24,11 +25,42 @@ console.log('[Auth] Database mode:', usePostgres ? 'PostgreSQL (Production)' : '
 console.log('[Auth] Environment:', process.env.NODE_ENV || 'development');
 
 if (usePostgres) {
-  // For PostgreSQL, we'll pass the connection string directly to Better Auth
-  // Better Auth will create its own connection pool internally
-  console.log('[Auth] ✅ Using PostgreSQL');
-  console.log('[Auth] Database URL:', process.env.DATABASE_URL?.replace(/:[^:@]+@/, ':****@')); // Hide password
-  db = process.env.DATABASE_URL; // Just store the connection string
+  try {
+    console.log('[Auth] 🔧 Setting up PostgreSQL with Kysely...');
+    console.log('[Auth] Database URL:', process.env.DATABASE_URL?.replace(/:[^:@]+@/, ':****@')); // Hide password
+
+    // Create postgres.js client
+    const sql = postgres(process.env.DATABASE_URL, {
+      ssl: 'require',
+      max: 10, // Maximum number of connections
+      idle_timeout: 20,
+      connect_timeout: 10
+    });
+
+    // Create Kysely instance with PostgreSQL dialect
+    db = new Kysely({
+      dialect: new PostgresDialect({
+        postgres: sql
+      })
+    });
+
+    console.log('[Auth] ✅ Kysely PostgreSQL adapter created');
+
+    // Test the connection
+    db.selectFrom('pg_catalog.pg_tables')
+      .select('tablename')
+      .limit(1)
+      .execute()
+      .then(() => {
+        console.log('[Auth] ✅ PostgreSQL connection test successful');
+      })
+      .catch((err) => {
+        console.error('[Auth] ❌ PostgreSQL connection test failed:', err.message);
+      });
+  } catch (error) {
+    console.error('[Auth] ❌ Failed to initialize PostgreSQL:', error.message);
+    console.error('[Auth] Error details:', error);
+  }
 } else {
   // Use SQLite for local development
   try {
@@ -96,7 +128,7 @@ try {
     };
 
     console.log('[Auth] 🔧 Creating Better Auth instance...');
-    console.log('[Auth] Database type:', usePostgres ? 'PostgreSQL (connection string)' : 'SQLite (instance)');
+    console.log('[Auth] Database type:', usePostgres ? 'PostgreSQL (Kysely adapter)' : 'SQLite (instance)');
 
     auth = betterAuth(authConfig);
     authInitialized = true;
