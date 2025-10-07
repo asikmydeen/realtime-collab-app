@@ -1,78 +1,56 @@
 import { betterAuth } from 'better-auth';
-import Database from 'better-sqlite3';
 import { Kysely, PostgresDialect } from 'kysely';
 import pg from 'pg';
 import crypto from 'crypto';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
 
 const { Pool } = pg;
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Generate a secure secret if not provided
 const authSecret = process.env.AUTH_SECRET || crypto.randomBytes(32).toString('hex');
 
-// Database configuration - use PostgreSQL in production, SQLite for local dev
-let db;
-let auth;
-let authInitialized = false;
-
-// Check if PostgreSQL is configured (production)
-const usePostgres = !!process.env.DATABASE_URL;
+// Validate DATABASE_URL
+if (!process.env.DATABASE_URL) {
+  throw new Error('❌ DATABASE_URL environment variable is required for Supabase PostgreSQL');
+}
 
 console.log('='.repeat(60));
 console.log('[Auth] 🔧 Initializing Authentication System');
-console.log('[Auth] Database mode:', usePostgres ? 'PostgreSQL (Production)' : 'SQLite (Local Dev)');
-console.log('[Auth] Environment:', process.env.NODE_ENV || 'development');
+console.log('[Auth] Database: PostgreSQL (Supabase)');
+console.log('[Auth] Environment:', process.env.NODE_ENV || 'production');
 
-if (usePostgres) {
-  try {
-    console.log('[Auth] 🔧 Setting up PostgreSQL with Kysely...');
-    console.log('[Auth] Database URL:', process.env.DATABASE_URL?.replace(/:[^:@]+@/, ':****@')); // Hide password
+// Create PostgreSQL connection pool
+console.log('[Auth] 🔧 Setting up PostgreSQL with Kysely...');
+console.log('[Auth] Database URL:', process.env.DATABASE_URL?.replace(/:[^:@]+@/, ':****@'));
 
-    // Create pg Pool
-    const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-      max: 10, // Maximum number of connections
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000
-    });
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000
+});
 
-    // Create Kysely instance with PostgreSQL dialect using pg Pool
-    db = new Kysely({
-      dialect: new PostgresDialect({
-        pool: pool
-      })
-    });
+// Create Kysely instance with PostgreSQL dialect
+const db = new Kysely({
+  dialect: new PostgresDialect({
+    pool: pool
+  })
+});
 
-    console.log('[Auth] ✅ Kysely PostgreSQL adapter created');
+console.log('[Auth] ✅ Kysely PostgreSQL adapter created');
 
-    // Test the connection
-    db.selectFrom('pg_catalog.pg_tables')
-      .select('tablename')
-      .limit(1)
-      .execute()
-      .then(() => {
-        console.log('[Auth] ✅ PostgreSQL connection test successful');
-      })
-      .catch((err) => {
-        console.error('[Auth] ❌ PostgreSQL connection test failed:', err.message);
-      });
-  } catch (error) {
-    console.error('[Auth] ❌ Failed to initialize PostgreSQL:', error.message);
-    console.error('[Auth] Error details:', error);
-  }
-} else {
-  // Use SQLite for local development
-  try {
-    db = new Database(join(__dirname, '..', 'auth.db'));
-    console.log('[Auth] ✅ SQLite database initialized (local dev)');
-  } catch (error) {
-    console.error('[Auth] ❌ Failed to initialize SQLite database:', error);
-  }
-}
+// Test the connection
+db.selectFrom('pg_catalog.pg_tables')
+  .select('tablename')
+  .limit(1)
+  .execute()
+  .then(() => {
+    console.log('[Auth] ✅ PostgreSQL connection test successful');
+  })
+  .catch((err) => {
+    console.error('[Auth] ❌ PostgreSQL connection test failed:', err.message);
+  });
+
 console.log('='.repeat(60));
 
 // Determine base URL from environment
@@ -86,62 +64,60 @@ const getBaseURL = () => {
 };
 
 // Create Better Auth instance
+let auth;
+let authInitialized = false;
+
 try {
-  if (db) {
-    const authConfig = {
-      database: db, // Pass connection string for PostgreSQL or Database instance for SQLite
-      baseURL: getBaseURL(),
-      secret: authSecret,
+  const authConfig = {
+    database: db,
+    baseURL: getBaseURL(),
+    secret: authSecret,
 
-      emailAndPassword: {
+    emailAndPassword: {
+      enabled: true,
+      requireEmailVerification: false
+    },
+
+    session: {
+      expiresIn: 60 * 60 * 24 * 30,
+      updateAge: 60 * 60 * 24,
+      cookieCache: {
         enabled: true,
-        requireEmailVerification: false
-      },
-
-      session: {
-        expiresIn: 60 * 60 * 24 * 30, // 30 days
-        updateAge: 60 * 60 * 24, // Update session every 24 hours
-        cookieCache: {
-          enabled: true,
-          maxAge: 60 * 5 // 5 minutes
-        }
-      },
-
-      user: {
-        additionalFields: {
-          displayName: {
-            type: 'string',
-            required: false
-          }
-        }
-      },
-
-      trustedOrigins: [
-        process.env.CLIENT_URL || 'http://localhost:3000',
-        'http://localhost:5173', // Vite dev server
-        'https://realtime-collab-app.vercel.app',
-        'https://www.alamuna.art' // Production domain
-      ],
-
-      // Advanced options
-      advanced: {
-        useSecureCookies: process.env.NODE_ENV === 'production',
-        generateId: () => crypto.randomBytes(16).toString('hex')
+        maxAge: 60 * 5
       }
-    };
+    },
 
-    console.log('[Auth] 🔧 Creating Better Auth instance...');
-    console.log('[Auth] Database type:', usePostgres ? 'PostgreSQL (Kysely adapter)' : 'SQLite (instance)');
+    user: {
+      additionalFields: {
+        displayName: {
+          type: 'string',
+          required: false
+        }
+      }
+    },
 
-    auth = betterAuth(authConfig);
-    authInitialized = true;
-    console.log('[Auth] Better Auth initialized successfully');
-  } else {
-    console.warn('[Auth] Better Auth disabled - database not available');
-  }
+    trustedOrigins: [
+      process.env.CLIENT_URL || 'http://localhost:3000',
+      'http://localhost:5173',
+      'https://realtime-collab-app.vercel.app',
+      'https://www.alamuna.art'
+    ],
+
+    advanced: {
+      useSecureCookies: process.env.NODE_ENV === 'production',
+      generateId: () => crypto.randomBytes(16).toString('hex')
+    }
+  };
+
+  console.log('[Auth] 🔧 Creating Better Auth instance with PostgreSQL...');
+
+  auth = betterAuth(authConfig);
+  authInitialized = true;
+  console.log('[Auth] ✅ Better Auth initialized successfully');
 } catch (error) {
-  console.error('[Auth] Failed to initialize Better Auth:', error);
-  console.warn('[Auth] Continuing without authentication');
+  console.error('[Auth] ❌ Failed to initialize Better Auth:', error);
+  console.error('[Auth] Error details:', error.message);
+  throw error;
 }
 
 // Export auth handlers for Express
