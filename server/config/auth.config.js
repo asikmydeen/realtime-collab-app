@@ -1,5 +1,6 @@
 import { betterAuth } from 'better-auth';
 import Database from 'better-sqlite3';
+import pg from 'pg';
 import crypto from 'crypto';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -9,16 +10,33 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // Generate a secure secret if not provided
 const authSecret = process.env.AUTH_SECRET || crypto.randomBytes(32).toString('hex');
 
-// Use SQLite for auth data (Better Auth works best with SQL databases)
+// Database configuration - use PostgreSQL in production, SQLite for local dev
 let db;
 let auth;
 let authInitialized = false;
 
-try {
-  db = new Database(join(__dirname, '..', 'auth.db'));
-  console.log('[Auth] SQLite database initialized');
-} catch (error) {
-  console.error('[Auth] Failed to initialize SQLite database:', error);
+// Check if PostgreSQL is configured (production)
+const usePostgres = !!process.env.DATABASE_URL;
+
+if (usePostgres) {
+  try {
+    const { Pool } = pg;
+    db = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    });
+    console.log('[Auth] PostgreSQL database initialized');
+  } catch (error) {
+    console.error('[Auth] Failed to initialize PostgreSQL database:', error);
+  }
+} else {
+  // Use SQLite for local development
+  try {
+    db = new Database(join(__dirname, '..', 'auth.db'));
+    console.log('[Auth] SQLite database initialized');
+  } catch (error) {
+    console.error('[Auth] Failed to initialize SQLite database:', error);
+  }
 }
 
 // Determine base URL from environment
@@ -34,8 +52,11 @@ const getBaseURL = () => {
 // Create Better Auth instance
 try {
   if (db) {
-    auth = betterAuth({
-      database: db,
+    const authConfig = {
+      database: usePostgres ? {
+        provider: 'pg',
+        db: db
+      } : db,
       baseURL: getBaseURL(),
       secret: authSecret,
 
@@ -76,7 +97,9 @@ try {
           generateId: () => crypto.randomBytes(32).toString('hex')
         }
       }
-    });
+    };
+
+    auth = betterAuth(authConfig);
     authInitialized = true;
     console.log('[Auth] Better Auth initialized successfully');
   } else {
