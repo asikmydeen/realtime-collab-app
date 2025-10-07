@@ -46,7 +46,20 @@ try {
 
       session: {
         expiresIn: 60 * 60 * 24 * 30, // 30 days
-        cookieName: 'world-art-session'
+        cookieName: 'world-art-session',
+        cookieCache: {
+          enabled: true,
+          maxAge: 60 * 5 // 5 minutes
+        }
+      },
+
+      advanced: {
+        cookieOptions: {
+          sameSite: 'none', // Required for cross-site cookies
+          secure: true,     // Required when sameSite=none
+          httpOnly: true,
+          path: '/'
+        }
       },
 
       user: {
