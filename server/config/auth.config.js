@@ -18,19 +18,39 @@ let authInitialized = false;
 // Check if PostgreSQL is configured (production)
 const usePostgres = !!process.env.DATABASE_URL;
 
+console.log('='.repeat(60));
+console.log('[Auth] 🔧 Initializing Authentication System');
 console.log('[Auth] Database mode:', usePostgres ? 'PostgreSQL (Production)' : 'SQLite (Local Dev)');
+console.log('[Auth] Environment:', process.env.NODE_ENV || 'development');
 
 if (usePostgres) {
   try {
     const { Pool } = pg;
+
+    // Validate DATABASE_URL format
+    if (!process.env.DATABASE_URL.startsWith('postgresql://')) {
+      throw new Error('DATABASE_URL must start with postgresql://');
+    }
+
     db = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: { rejectUnauthorized: false }
     });
-    console.log('[Auth] ✅ PostgreSQL database initialized');
+
+    console.log('[Auth] ✅ PostgreSQL pool created');
     console.log('[Auth] Database URL:', process.env.DATABASE_URL?.replace(/:[^:@]+@/, ':****@')); // Hide password
+
+    // Test the connection
+    db.query('SELECT NOW()', (err, res) => {
+      if (err) {
+        console.error('[Auth] ❌ PostgreSQL connection test failed:', err.message);
+      } else {
+        console.log('[Auth] ✅ PostgreSQL connection test successful');
+      }
+    });
   } catch (error) {
-    console.error('[Auth] ❌ Failed to initialize PostgreSQL database:', error);
+    console.error('[Auth] ❌ Failed to initialize PostgreSQL database:', error.message);
+    console.error('[Auth] Error details:', error);
   }
 } else {
   // Use SQLite for local development
@@ -41,6 +61,7 @@ if (usePostgres) {
     console.error('[Auth] ❌ Failed to initialize SQLite database:', error);
   }
 }
+console.log('='.repeat(60));
 
 // Determine base URL from environment
 const getBaseURL = () => {
@@ -57,8 +78,8 @@ try {
   if (db) {
     const authConfig = {
       database: usePostgres ? {
-        provider: 'pg',
-        db: db
+        provider: 'postgres',
+        url: process.env.DATABASE_URL
       } : db,
       baseURL: getBaseURL(),
       secret: authSecret,
@@ -96,9 +117,7 @@ try {
       // Advanced options
       advanced: {
         useSecureCookies: process.env.NODE_ENV === 'production',
-        database: {
-          generateId: () => crypto.randomBytes(32).toString('hex')
-        }
+        generateId: () => crypto.randomBytes(32).toString('hex')
       }
     };
 
@@ -197,12 +216,12 @@ export const authHandler = async (req, res) => {
 // Helper to verify session token
 export const verifySession = async (token) => {
   if (!authInitialized || !auth) {
-    console.log('[Auth] Auth not initialized');
+    console.log('[Auth] ❌ Auth not initialized');
     return null;
   }
 
   try {
-    console.log('[Auth] Verifying token:', token.substring(0, 10) + '...');
+    console.log('[Auth] 🔍 Verifying token:', token.substring(0, 10) + '...');
 
     // Better Auth expects the session token in a cookie, but for WebSocket
     // we need to verify it manually. Create a mock request with the token.
@@ -216,10 +235,16 @@ export const verifySession = async (token) => {
       headers: mockRequest.headers
     });
 
-    console.log('[Auth] Session verification result:', session ? 'valid' : 'invalid');
-    return session;
+    if (session && session.user) {
+      console.log('[Auth] ✅ Session valid for user:', session.user.id, session.user.name || session.user.email);
+      return session;
+    } else {
+      console.log('[Auth] ❌ Session invalid or expired');
+      return null;
+    }
   } catch (error) {
-    console.error('[Auth] Session verification failed:', error.message);
+    console.error('[Auth] ❌ Session verification error:', error.message);
+    console.error('[Auth] Error details:', error);
     return null;
   }
 };
