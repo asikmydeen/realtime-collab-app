@@ -72,7 +72,9 @@ try {
       // Advanced options
       advanced: {
         useSecureCookies: process.env.NODE_ENV === 'production',
-        generateId: () => crypto.randomBytes(32).toString('hex')
+        database: {
+          generateId: () => crypto.randomBytes(32).toString('hex')
+        }
       }
     });
     authInitialized = true;
@@ -124,22 +126,38 @@ export const authHandler = async (req, res) => {
     // Convert Web Response to Express response
     res.status(response.status);
 
-    // Copy headers and modify Set-Cookie for cross-origin
+    // Copy headers
     response.headers.forEach((value, key) => {
-      if (key.toLowerCase() === 'set-cookie') {
-        // Modify cookie to include SameSite=None and Secure
-        let modifiedCookie = value;
-        if (!modifiedCookie.includes('SameSite')) {
-          modifiedCookie += '; SameSite=None';
-        }
-        if (!modifiedCookie.includes('Secure')) {
-          modifiedCookie += '; Secure';
-        }
-        res.setHeader(key, modifiedCookie);
-      } else {
+      if (key.toLowerCase() !== 'set-cookie') {
         res.setHeader(key, value);
       }
     });
+
+    // Handle Set-Cookie headers separately (can have multiple values)
+    const setCookieHeaders = response.headers.getSetCookie?.() || [];
+    if (setCookieHeaders.length > 0) {
+      const modifiedCookies = setCookieHeaders.map(cookie => {
+        // Modify cookie to include SameSite=None and Secure
+        let modifiedCookie = cookie;
+
+        // Replace SameSite=Lax or SameSite=Strict with SameSite=None
+        modifiedCookie = modifiedCookie.replace(/SameSite=(Lax|Strict)/gi, 'SameSite=None');
+
+        // Add SameSite=None if not present
+        if (!modifiedCookie.includes('SameSite')) {
+          modifiedCookie += '; SameSite=None';
+        }
+
+        // Add Secure if not present
+        if (!modifiedCookie.includes('Secure')) {
+          modifiedCookie += '; Secure';
+        }
+
+        return modifiedCookie;
+      });
+
+      res.setHeader('Set-Cookie', modifiedCookies);
+    }
 
     // Send body
     const body = await response.text();
