@@ -17,9 +17,10 @@ const [sessionData, setSessionData] = createSignal(null);
 const [isLoading, setIsLoading] = createSignal(true);
 
 // Check session on load - silently fail if auth service is unavailable
-authClient.getSession().then(session => {
-  console.log('[Auth] Session loaded:', session);
-  setSessionData(session);
+authClient.getSession().then(response => {
+  console.log('[Auth] Session loaded:', response);
+  // Better Auth returns { data: { user, session }, error }
+  setSessionData(response.data);
   setIsLoading(false);
 }).catch((error) => {
   console.warn('[Auth] Auth service unavailable, continuing without authentication:', error.message);
@@ -62,10 +63,11 @@ export const useSignUp = () => async (email, password, name) => {
 // Refresh session from server
 export const refreshSession = async () => {
   try {
-    const session = await authClient.getSession();
-    console.log('[Auth] Session refreshed:', session);
-    setSessionData(session);
-    return session;
+    const response = await authClient.getSession();
+    console.log('[Auth] Session refreshed:', response);
+    // Better Auth returns { data: { user, session }, error }
+    setSessionData(response.data);
+    return response.data;
   } catch (error) {
     console.error('[Auth] Failed to refresh session:', error);
     setSessionData(null);
