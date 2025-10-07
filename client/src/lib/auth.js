@@ -54,6 +54,20 @@ export const useSignUp = () => async (email, password, name) => {
   }
 };
 
+// Refresh session from server
+export const refreshSession = async () => {
+  try {
+    const session = await authClient.getSession();
+    console.log('[Auth] Session refreshed:', session);
+    setSessionData(session);
+    return session;
+  } catch (error) {
+    console.error('[Auth] Failed to refresh session:', error);
+    setSessionData(null);
+    return null;
+  }
+};
+
 export const useSignOut = () => async () => {
   try {
     await authClient.signOut();

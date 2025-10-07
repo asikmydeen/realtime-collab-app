@@ -1,6 +1,6 @@
 import { createSignal, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { authClient } from '../lib/auth';
+import { authClient, refreshSession } from '../lib/auth';
 
 export function Auth(props) {
   const [mode, setMode] = createSignal('signin'); // 'signin' or 'signup'
@@ -31,6 +31,8 @@ export function Auth(props) {
             email: email(),
             password: password()
           });
+          // Refresh session to update UI
+          await refreshSession();
           props.onSuccess?.();
         }
       } else {
@@ -42,6 +44,8 @@ export function Auth(props) {
         if (result.error) {
           setError(result.error.message || 'Failed to sign in');
         } else {
+          // Refresh session to update UI
+          await refreshSession();
           props.onSuccess?.();
         }
       }
