@@ -1,4 +1,5 @@
-import sharp from 'sharp';
+// Sharp removed - image compression not needed for current implementation
+// import sharp from 'sharp';
 
 const CHUNK_SIZE = 512;
 const REGION_SIZE = 16;
@@ -39,7 +40,7 @@ export class ChunkManager {
 
   createEmptyChunk(chunkId) {
     const [x, y] = chunkId.split(':').map(Number);
-    
+
     // Create white canvas buffer
     const buffer = Buffer.alloc(CHUNK_SIZE * CHUNK_SIZE * 4);
     buffer.fill(255); // White
@@ -59,7 +60,7 @@ export class ChunkManager {
 
   async applyOperation(chunkId, operation) {
     const chunk = await this.getChunk(chunkId);
-    
+
     // Add operation to buffer
     chunk.operations.push(operation);
     chunk.lastModified = Date.now();
@@ -78,7 +79,7 @@ export class ChunkManager {
     // Render all operations to chunk buffer
     // This is a stub - would use actual canvas rendering
     console.log(`Rendering chunk ${chunk.id} with ${chunk.operations.length} operations`);
-    
+
     // Clear operations after rendering
     chunk.operations = [];
   }
@@ -87,20 +88,13 @@ export class ChunkManager {
     const chunk = this.chunks.get(chunkId);
     if (!chunk || !this.dirtyChunks.has(chunkId)) return;
 
-    // Compress and save to storage
-    const compressed = await sharp(chunk.buffer, {
-      raw: {
-        width: CHUNK_SIZE,
-        height: CHUNK_SIZE,
-        channels: 4
-      }
-    })
-    .png({ compressionLevel: 9 })
-    .toBuffer();
+    // Image compression removed - save raw buffer
+    // In production, you might want to add compression here
+    const compressed = chunk.buffer;
 
     // Save to storage (stub)
     await this.saveChunkToStorage(chunkId, compressed);
-    
+
     this.dirtyChunks.delete(chunkId);
   }
 
@@ -151,7 +145,7 @@ export class RegionManager {
     // Remove client from region
     if (this.regions.has(regionId)) {
       this.regions.get(regionId).delete(clientId);
-      
+
       // Clean up empty regions
       if (this.regions.get(regionId).size === 0) {
         this.regions.delete(regionId);
@@ -199,10 +193,10 @@ export class InfiniteCanvasServer {
 
   async handleDrawOperation(clientId, operation) {
     const { x, y, lastX, lastY, color, size } = operation;
-    
+
     // Get affected chunks
     const chunks = this.getAffectedChunks(lastX || x, lastY || y, x, y, size);
-    
+
     // Apply operation to each chunk
     for (const chunkId of chunks) {
       await this.chunkManager.applyOperation(chunkId, operation);
@@ -211,7 +205,7 @@ export class InfiniteCanvasServer {
     // Get region for broadcasting
     const chunkCoords = this.getChunkCoords(x, y);
     const regionId = this.chunkManager.getRegionId(chunkCoords.chunkX, chunkCoords.chunkY);
-    
+
     // Return clients to broadcast to
     return this.regionManager.getClientsInRegion(regionId);
   }
@@ -251,21 +245,15 @@ export class InfiniteCanvasServer {
 
   async getChunkData(chunkId) {
     const chunk = await this.chunkManager.getChunk(chunkId);
-    
+
     // Convert to base64 PNG for transmission
-    const png = await sharp(chunk.buffer, {
-      raw: {
-        width: CHUNK_SIZE,
-        height: CHUNK_SIZE,
-        channels: 4
-      }
-    })
-    .png()
-    .toBuffer();
+    // Image conversion removed - return raw buffer as base64
+    // In production, you might want to convert to PNG here
+    const base64Data = chunk.buffer.toString('base64');
 
     return {
       chunkId,
-      imageData: `data:image/png;base64,${png.toString('base64')}`,
+      imageData: `data:image/png;base64,${base64Data}`,
       lastModified: chunk.lastModified
     };
   }

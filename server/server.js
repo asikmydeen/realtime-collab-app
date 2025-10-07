@@ -4,7 +4,6 @@ import { WebSocketServer } from 'ws';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import { createServer } from 'http';
-import sharp from 'sharp';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -366,9 +365,10 @@ connectionManager.on('connection', async (ws, req) => {
           handleClear(clientId);
           break;
 
-        case 'image':
-          handleImageProcess(clientId, message);
-          break;
+        // Image processing removed - not used in current implementation
+        // case 'image':
+        //   handleImageProcess(clientId, message);
+        //   break;
 
         case 'switchRegion':
           handleRegionSwitch(clientId, message.regionId);
@@ -673,33 +673,16 @@ function handleClear(clientId) {
   });
 }
 
-async function handleImageProcess(clientId, message) {
-  const client = clients.get(clientId);
-  if (!client) return;
-
-  try {
-    // Use Sharp for image processing (WebAssembly-based)
-    const imageBuffer = Buffer.from(message.imageData, 'base64');
-
-    const processed = await sharp(imageBuffer)
-      .resize(800, 600, { fit: 'inside' })
-      .blur(message.blur || 0)
-      .sharpen(message.sharpen || 0)
-      .normalize(message.normalize || false)
-      .toBuffer();
-
-    client.ws.send(JSON.stringify({
-      type: 'processedImage',
-      imageData: processed.toString('base64')
-    }));
-  } catch (error) {
-    console.error('Image processing error:', error);
-    client.ws.send(JSON.stringify({
-      type: 'error',
-      message: 'Image processing failed'
-    }));
-  }
-}
+// Image processing removed - sharp dependency not needed
+// async function handleImageProcess(clientId, message) {
+//   const client = clients.get(clientId);
+//   if (!client) return;
+//   // Image processing functionality removed to simplify dependencies
+//   client.ws.send(JSON.stringify({
+//     type: 'error',
+//     message: 'Image processing not available'
+//   }));
+// }
 
 // Heartbeat interval
 const heartbeatInterval = setInterval(() => {
