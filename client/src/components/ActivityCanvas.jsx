@@ -732,39 +732,40 @@ export function ActivityCanvas(props) {
     container: {
       position: 'fixed',
       inset: 0,
-      background: 'rgba(17, 24, 39, 0.95)',
-      'backdrop-filter': 'blur(4px)',
+      background: 'rgba(0, 0, 0, 0.85)',
+      'backdrop-filter': 'blur(8px)',
       'z-index': 50,
       display: 'flex',
       'flex-direction': 'column',
-      animation: 'fadeIn 0.3s ease-in-out'
+      animation: 'fadeIn 0.2s ease-out'
     },
     header: {
       display: 'flex',
       'align-items': 'center',
       'justify-content': 'space-between',
-      padding: isMobile ? '14px 16px' : '18px 24px',
-      background: 'linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(17, 24, 39, 0.95) 100%)',
-      'backdrop-filter': 'blur(10px)',
-      'border-bottom': '2px solid rgba(59, 130, 246, 0.3)',
-      'box-shadow': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-      'flex-shrink': 0
+      padding: isMobile ? '16px 20px' : '20px 32px',
+      background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+      'border-bottom': '1px solid rgba(148, 163, 184, 0.1)',
+      'box-shadow': '0 4px 6px -1px rgba(0, 0, 0, 0.2)',
+      'flex-shrink': 0,
+      'min-height': isMobile ? '70px' : '80px'
     },
     mainContent: {
       flex: 1,
       display: 'flex',
-      padding: isMobile ? '8px' : '16px 24px',
-      gap: isMobile ? '8px' : '16px',
+      padding: isMobile ? '12px' : '20px 32px 20px 32px',
+      gap: isMobile ? '12px' : '20px',
       'min-height': 0,
       'overflow': 'hidden'
     },
     canvasContainer: {
       flex: 1,
-      background: 'white',
-      'border-radius': isMobile ? '8px' : '12px',
-      'box-shadow': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+      background: '#ffffff',
+      'border-radius': isMobile ? '12px' : '16px',
+      'box-shadow': '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)',
       overflow: 'hidden',
-      position: 'relative'
+      position: 'relative',
+      border: '2px solid rgba(148, 163, 184, 0.2)'
     },
     participantsButton: {
       position: 'relative',
@@ -807,122 +808,186 @@ export function ActivityCanvas(props) {
     <div style={modernStyles.container}>
       {/* Header Bar */}
       <div style={modernStyles.header}>
-        <div style={{ display: 'flex', 'align-items': 'center', gap: '16px', flex: 1, 'min-width': 0 }}>
-          <div style={{ flex: 1, 'min-width': 0 }}>
-            <div style={{ display: 'flex', 'align-items': 'center', gap: '8px', 'margin-bottom': '4px' }}>
-              <h2 style={{
-                margin: 0,
-                'font-size': isMobile ? '18px' : '22px',
-                'font-weight': '700',
-                color: 'white',
-                'text-overflow': 'ellipsis',
-                overflow: 'hidden',
-                'white-space': 'nowrap'
-              }}>
-                🎨 {props.activity.title}
-              </h2>
-            </div>
+        {/* Left Section - Activity Info */}
+        <div style={{
+          flex: 1,
+          'min-width': 0,
+          display: 'flex',
+          'flex-direction': 'column',
+          gap: '8px',
+          'padding-right': '16px'
+        }}>
+          {/* Activity Title */}
+          <h1 style={{
+            margin: 0,
+            'font-size': isMobile ? '20px' : '26px',
+            'font-weight': '700',
+            color: '#ffffff',
+            'line-height': '1.2',
+            display: 'flex',
+            'align-items': 'center',
+            gap: '10px'
+          }}>
+            <span style={{ 'font-size': isMobile ? '24px' : '30px', 'flex-shrink': 0 }}>🎨</span>
+            <span style={{
+              overflow: 'hidden',
+              'text-overflow': 'ellipsis',
+              'white-space': 'nowrap',
+              flex: 1,
+              'min-width': 0
+            }}>
+              {props.activity.title || 'Untitled Canvas'}
+            </span>
+          </h1>
+
+          {/* Activity Metadata */}
+          <div style={{
+            display: 'flex',
+            'align-items': 'center',
+            gap: '16px',
+            'flex-wrap': 'wrap',
+            'font-size': isMobile ? '13px' : '15px',
+            color: '#94a3b8'
+          }}>
+            {/* Location */}
             <div style={{
               display: 'flex',
               'align-items': 'center',
-              gap: '12px',
-              'flex-wrap': 'wrap',
-              'font-size': isMobile ? '11px' : '13px',
-              color: 'rgba(156, 163, 175, 1)'
+              gap: '6px',
+              'max-width': isMobile ? '180px' : '300px',
+              'min-width': 0
             }}>
-              <span style={{ display: 'flex', 'align-items': 'center', gap: '4px' }}>
-                <span>📍</span>
-                <span style={{
-                  'text-overflow': 'ellipsis',
-                  overflow: 'hidden',
-                  'white-space': 'nowrap',
-                  'max-width': isMobile ? '120px' : '200px'
-                }}>
-                  {props.activity.street}
-                </span>
+              <span style={{ 'font-size': '16px', 'flex-shrink': 0 }}>📍</span>
+              <span style={{
+                overflow: 'hidden',
+                'text-overflow': 'ellipsis',
+                'white-space': 'nowrap'
+              }}>
+                {props.activity.street || 'Unknown Location'}
               </span>
-              <Show when={props.activity.ownerName && props.activity.ownerName !== 'Anonymous'}>
-                <span style={{ display: 'flex', 'align-items': 'center', gap: '4px' }}>
-                  <span>👤</span>
-                  <span>by {props.activity.ownerName}</span>
-                </span>
-              </Show>
+            </div>
+
+            {/* Owner */}
+            <Show when={props.activity.ownerName && props.activity.ownerName !== 'Anonymous'}>
+              <div style={{ display: 'flex', 'align-items': 'center', gap: '6px' }}>
+                <span style={{ 'font-size': '16px' }}>👤</span>
+                <span>by {props.activity.ownerName}</span>
+              </div>
+            </Show>
+
+            {/* Participants Count */}
+            <div style={{ display: 'flex', 'align-items': 'center', gap: '6px' }}>
+              <span style={{ 'font-size': '16px' }}>👥</span>
+              <span>{participants().size + 1} {participants().size === 0 ? 'person' : 'people'}</span>
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', 'align-items': 'center', gap: isMobile ? '8px' : '12px' }}>
+        {/* Right Section - Action Buttons */}
+        <div style={{
+          display: 'flex',
+          'align-items': 'center',
+          gap: isMobile ? '8px' : '12px',
+          'flex-shrink': 0
+        }}>
           {/* Mobile contribution requests notification */}
           <Show when={isMobile && props.wsManager?.userHash === props.activity?.ownerId && contributionRequests().length > 0}>
             <button
               onClick={() => setShowMobileRequests(true)}
               style={{
-                ...modernStyles.participantsButton,
-                background: 'rgba(239, 68, 68, 0.8)',
+                padding: '10px 14px',
+                background: '#ef4444',
+                color: 'white',
+                border: 'none',
+                'border-radius': '10px',
+                cursor: 'pointer',
+                'font-size': '16px',
+                'font-weight': '600',
+                display: 'flex',
+                'align-items': 'center',
+                gap: '6px',
+                'box-shadow': '0 2px 8px rgba(239, 68, 68, 0.4)',
+                transition: 'all 0.2s',
                 animation: 'pulse 2s infinite'
               }}
-              onMouseEnter={(e) => {
-                e.target.style.background = 'rgba(239, 68, 68, 1)';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.background = 'rgba(239, 68, 68, 0.8)';
-              }}
             >
-              📋
-              <span style={{
-                ...modernStyles.badge,
-                background: '#fbbf24',
-                color: 'black'
-              }}>
-                {contributionRequests().length}
-              </span>
+              <span style={{ 'font-size': '18px' }}>🔔</span>
+              <span>{contributionRequests().length}</span>
             </button>
           </Show>
 
-          {/* Participants Button */}
-          <button
-            onClick={() => setShowParticipants(!showParticipants())}
-            style={{
-              ...modernStyles.participantsButton,
-              background: showParticipants() ? 'rgba(59, 130, 246, 0.8)' : 'rgba(55, 65, 81, 0.5)'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.background = showParticipants() ? 'rgba(59, 130, 246, 1)' : 'rgba(55, 65, 81, 0.7)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = showParticipants() ? 'rgba(59, 130, 246, 0.8)' : 'rgba(55, 65, 81, 0.5)';
-            }}
-          >
-            👥
-            <span style={modernStyles.badge}>
-              {participants().size + 1}
-            </span>
-          </button>
+          {/* Participants Toggle Button */}
+          <Show when={!isMobile}>
+            <button
+              onClick={() => setShowParticipants(!showParticipants())}
+              style={{
+                padding: '10px 16px',
+                background: showParticipants() ? '#3b82f6' : '#475569',
+                color: 'white',
+                border: 'none',
+                'border-radius': '10px',
+                cursor: 'pointer',
+                'font-size': '14px',
+                'font-weight': '600',
+                display: 'flex',
+                'align-items': 'center',
+                gap: '8px',
+                transition: 'all 0.2s',
+                'box-shadow': showParticipants()
+                  ? '0 2px 8px rgba(59, 130, 246, 0.4)'
+                  : '0 2px 4px rgba(0, 0, 0, 0.2)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.05)';
+                e.currentTarget.style.boxShadow = showParticipants()
+                  ? '0 4px 12px rgba(59, 130, 246, 0.5)'
+                  : '0 4px 8px rgba(0, 0, 0, 0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.boxShadow = showParticipants()
+                  ? '0 2px 8px rgba(59, 130, 246, 0.4)'
+                  : '0 2px 4px rgba(0, 0, 0, 0.2)';
+              }}
+            >
+              <span style={{ 'font-size': '18px' }}>👥</span>
+              <span>{participants().size + 1}</span>
+            </button>
+          </Show>
 
           {/* Close Button */}
           <button
             onClick={props.onClose}
             style={{
-              ...modernStyles.closeButton,
-              padding: isMobile ? '12px' : '10px',
-              background: isMobile ? 'rgba(239, 68, 68, 0.8)' : 'rgba(55, 65, 81, 0.5)'
+              padding: isMobile ? '10px 14px' : '10px 16px',
+              background: '#ef4444',
+              color: 'white',
+              border: 'none',
+              'border-radius': '10px',
+              cursor: 'pointer',
+              'font-size': isMobile ? '20px' : '22px',
+              'font-weight': '700',
+              'line-height': 1,
+              display: 'flex',
+              'align-items': 'center',
+              'justify-content': 'center',
+              transition: 'all 0.2s',
+              'min-width': isMobile ? '44px' : '48px',
+              'min-height': isMobile ? '44px' : '48px',
+              'box-shadow': '0 2px 8px rgba(239, 68, 68, 0.4)'
             }}
             onMouseEnter={(e) => {
-              if (!isMobile) {
-                e.target.style.background = 'rgba(239, 68, 68, 0.2)';
-                e.target.style.color = 'rgba(248, 113, 113, 1)';
-              }
+              e.currentTarget.style.background = '#dc2626';
+              e.currentTarget.style.transform = 'scale(1.05)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.5)';
             }}
             onMouseLeave={(e) => {
-              if (!isMobile) {
-                e.target.style.background = 'rgba(55, 65, 81, 0.5)';
-                e.target.style.color = 'rgba(209, 213, 219, 1)';
-              }
+              e.currentTarget.style.background = '#ef4444';
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(239, 68, 68, 0.4)';
             }}
           >
-            <svg style={{ width: isMobile ? '24px' : '20px', height: isMobile ? '24px' : '20px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-            </svg>
+            ✕
           </button>
         </div>
       </div>
