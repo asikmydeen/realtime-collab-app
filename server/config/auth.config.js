@@ -1,10 +1,12 @@
 import { betterAuth } from 'better-auth';
 import Database from 'better-sqlite3';
 import { Kysely, PostgresDialect } from 'kysely';
-import postgres from 'postgres';
+import pg from 'pg';
 import crypto from 'crypto';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+
+const { Pool } = pg;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -29,18 +31,19 @@ if (usePostgres) {
     console.log('[Auth] 🔧 Setting up PostgreSQL with Kysely...');
     console.log('[Auth] Database URL:', process.env.DATABASE_URL?.replace(/:[^:@]+@/, ':****@')); // Hide password
 
-    // Create postgres.js client
-    const sql = postgres(process.env.DATABASE_URL, {
-      ssl: 'require',
+    // Create pg Pool
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
       max: 10, // Maximum number of connections
-      idle_timeout: 20,
-      connect_timeout: 10
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000
     });
 
-    // Create Kysely instance with PostgreSQL dialect
+    // Create Kysely instance with PostgreSQL dialect using pg Pool
     db = new Kysely({
       dialect: new PostgresDialect({
-        postgres: sql
+        pool: pool
       })
     });
 
