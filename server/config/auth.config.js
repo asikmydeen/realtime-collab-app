@@ -117,7 +117,7 @@ try {
       // Advanced options
       advanced: {
         useSecureCookies: process.env.NODE_ENV === 'production',
-        generateId: () => crypto.randomBytes(32).toString('hex')
+        generateId: () => crypto.randomBytes(16).toString('hex')
       }
     };
 
@@ -231,20 +231,28 @@ export const verifySession = async (token) => {
       }
     });
 
-    const session = await auth.api.getSession({
+    const result = await auth.api.getSession({
       headers: mockRequest.headers
     });
 
-    if (session && session.user) {
-      console.log('[Auth] ✅ Session valid for user:', session.user.id, session.user.name || session.user.email);
-      return session;
+    console.log('[Auth] 🔍 Session result type:', typeof result);
+    console.log('[Auth] 🔍 Session result keys:', result ? Object.keys(result) : 'null');
+
+    // Better Auth returns { session, user } structure
+    if (result && result.session && result.user) {
+      console.log('[Auth] ✅ Session valid for user:', result.user.id, result.user.name || result.user.email);
+      return result;
+    } else if (result && result.user) {
+      // Sometimes it might just return { user }
+      console.log('[Auth] ✅ Session valid for user (no session object):', result.user.id, result.user.name || result.user.email);
+      return result;
     } else {
-      console.log('[Auth] ❌ Session invalid or expired');
+      console.log('[Auth] ❌ Session invalid or expired - result:', JSON.stringify(result));
       return null;
     }
   } catch (error) {
     console.error('[Auth] ❌ Session verification error:', error.message);
-    console.error('[Auth] Error details:', error);
+    console.error('[Auth] Error stack:', error.stack);
     return null;
   }
 };

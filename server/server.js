@@ -253,18 +253,29 @@ connectionManager.on('connection', async (ws, req) => {
   if (authToken) {
     console.log(`[Auth] Client provided auth token`);
     try {
-      const session = await verifySession(authToken);
-      if (session && session.user) {
-        userId = session.user.id;
-        userName = session.user.displayName || session.user.email?.split('@')[0] || 'User';
-        userHash = `auth_${userId}`; // Use auth-based hash
-        isAuthenticated = true;
-        console.log(`[Auth] Authenticated user: ${userName} (${userId})`);
+      const sessionResult = await verifySession(authToken);
+      console.log('[Auth] 🔍 Session result:', sessionResult ? 'exists' : 'null');
+
+      if (sessionResult) {
+        console.log('[Auth] 🔍 Session result structure:', JSON.stringify(sessionResult, null, 2));
+
+        // Better Auth returns { session, user } or just { user }
+        const user = sessionResult.user;
+
+        if (user) {
+          userId = user.id;
+          userName = user.name || user.displayName || user.email?.split('@')[0] || 'User';
+          userHash = `auth_${userId}`; // Use auth-based hash
+          isAuthenticated = true;
+          console.log(`[Auth] ✅ Authenticated user: ${userName} (${userId})`);
+        } else {
+          console.log(`[Auth] ❌ No user in session result`);
+        }
       } else {
-        console.log(`[Auth] Invalid token, falling back to userHash`);
+        console.log(`[Auth] ❌ Invalid token, falling back to userHash`);
       }
     } catch (error) {
-      console.error('[Auth] Token verification error:', error);
+      console.error('[Auth] ❌ Token verification error:', error);
     }
   }
 
