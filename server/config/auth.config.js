@@ -171,14 +171,29 @@ export const authHandler = async (req, res) => {
 // Helper to verify session token
 export const verifySession = async (token) => {
   if (!authInitialized || !auth) {
+    console.log('[Auth] Auth not initialized');
     return null;
   }
 
   try {
-    const session = await auth.api.getSession({ headers: { authorization: `Bearer ${token}` } });
+    console.log('[Auth] Verifying token:', token.substring(0, 10) + '...');
+
+    // Better Auth expects the session token in a cookie, but for WebSocket
+    // we need to verify it manually. Create a mock request with the token.
+    const mockRequest = new Request('http://localhost/api/auth/get-session', {
+      headers: {
+        'cookie': `better-auth.session_token=${token}`
+      }
+    });
+
+    const session = await auth.api.getSession({
+      headers: mockRequest.headers
+    });
+
+    console.log('[Auth] Session verification result:', session ? 'valid' : 'invalid');
     return session;
   } catch (error) {
-    console.error('[Auth] Session verification failed:', error);
+    console.error('[Auth] Session verification failed:', error.message);
     return null;
   }
 };
