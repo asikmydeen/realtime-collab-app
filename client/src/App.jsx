@@ -7,7 +7,7 @@ import { WasmProcessor } from './lib/wasm';
 import { config } from './config';
 import { getUserColor, generateUsername } from './utils/userColors';
 import { inject } from '@vercel/analytics';
-import { authClient, useSession, getSessionToken } from './lib/auth';
+import { useSession, useSignOut, getSessionToken } from './lib/auth';
 import { Auth } from './components/Auth';
 import { AccountPrompt } from './components/AccountPrompt';
 
@@ -187,9 +187,11 @@ function App() {
     }
   };
 
+  const signOut = useSignOut();
+
   const handleSignOut = async () => {
     try {
-      await authClient.signOut();
+      await signOut();
       // Reload to reset to anonymous mode
       window.location.reload();
     } catch (error) {

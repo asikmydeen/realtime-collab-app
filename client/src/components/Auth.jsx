@@ -1,6 +1,6 @@
 import { createSignal, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { authClient, refreshSession } from '../lib/auth';
+import { useSignIn, useSignUp, refreshSession } from '../lib/auth';
 
 export function Auth(props) {
   const [mode, setMode] = createSignal('signin'); // 'signin' or 'signup'
@@ -10,6 +10,9 @@ export function Auth(props) {
   const [error, setError] = createSignal('');
   const [loading, setLoading] = createSignal(false);
 
+  const signIn = useSignIn();
+  const signUp = useSignUp();
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -17,29 +20,21 @@ export function Auth(props) {
 
     try {
       if (mode() === 'signup') {
-        const result = await authClient.signUp.email({
-          email: email(),
-          password: password(),
-          name: displayName() || email().split('@')[0]
-        });
+        const result = await signUp(
+          email(),
+          password(),
+          displayName() || email().split('@')[0]
+        );
 
         if (result.error) {
           setError(result.error.message || 'Failed to sign up');
         } else {
-          // Automatically sign in after signup
-          await authClient.signIn.email({
-            email: email(),
-            password: password()
-          });
           // Refresh session to update UI
           await refreshSession();
           props.onSuccess?.();
         }
       } else {
-        const result = await authClient.signIn.email({
-          email: email(),
-          password: password()
-        });
+        const result = await signIn(email(), password());
 
         if (result.error) {
           setError(result.error.message || 'Failed to sign in');
