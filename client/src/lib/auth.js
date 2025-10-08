@@ -1,7 +1,8 @@
 import { createSignal } from 'solid-js';
 import { supabase } from './supabase';
 
-// Simple auth store for SolidJS
+// Supabase Auth integration for SolidJS
+// Using Supabase's built-in authentication (no server-side auth needed)
 const [sessionData, setSessionData] = createSignal(null);
 const [isLoading, setIsLoading] = createSignal(true);
 
