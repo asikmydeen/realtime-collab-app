@@ -13,7 +13,8 @@ let connectionString;
 
 if (process.env.DATABASE_PASSWORD) {
   // Build connection string from password
-  connectionString = `postgresql://postgres.zcpgprqeocumhgttqmhr:${process.env.DATABASE_PASSWORD}@aws-1-us-east-2.pooler.supabase.com:5432/postgres`;
+  // Session Pooler uses port 6543, not 5432
+  connectionString = `postgresql://postgres.zcpgprqeocumhgttqmhr:${process.env.DATABASE_PASSWORD}@aws-1-us-east-2.pooler.supabase.com:6543/postgres`;
   console.log('[Auth] 🔧 Using DATABASE_PASSWORD to construct connection string');
 } else if (process.env.DATABASE_URL) {
   // Use full connection string if provided
