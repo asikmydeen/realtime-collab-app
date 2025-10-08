@@ -14,15 +14,28 @@ if (!process.env.DATABASE_URL) {
 console.log('[Migration] 🔧 Running PostgreSQL migrations...');
 console.log('[Migration] Database URL:', process.env.DATABASE_URL?.replace(/:[^:@]+@/, ':****@'));
 
+// Parse connection string to force IPv4
+// Supabase direct connection uses IPv6 which Railway doesn't support
+// Use the pooler connection string instead (aws-0-*.pooler.supabase.com)
+const connectionString = process.env.DATABASE_URL;
+
+// Check if using direct connection (db.*.supabase.co) and warn
+if (connectionString.includes('db.') && connectionString.includes('.supabase.co')) {
+  console.warn('[Migration] ⚠️  WARNING: Using direct connection URL');
+  console.warn('[Migration] ⚠️  Railway may not support IPv6');
+  console.warn('[Migration] ⚠️  Consider using Session Pooler URL instead');
+  console.warn('[Migration] ⚠️  Format: postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres');
+}
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: connectionString,
   ssl: { rejectUnauthorized: false }
 });
 
 async function runMigrations() {
   try {
     console.log('[Migration] 📡 Connecting to PostgreSQL...');
-    
+
     // Create user table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS "user" (
@@ -112,4 +125,3 @@ runMigrations()
     console.error('[Migration] 💥 Migration failed:', error);
     process.exit(1);
   });
-
