@@ -6,25 +6,30 @@ const { Pool } = pg;
 // Load environment variables
 dotenv.config();
 
-if (!process.env.DATABASE_URL) {
-  console.log('[Migration] ⏭️  No DATABASE_URL - skipping migration');
+// Construct DATABASE_URL from password or use full URL if provided
+let connectionString;
+
+if (process.env.DATABASE_PASSWORD) {
+  // Build connection string from password
+  connectionString = `postgresql://postgres.zcpgprqeocumhgttqmhr:${process.env.DATABASE_PASSWORD}@aws-1-us-east-2.pooler.supabase.com:5432/postgres`;
+  console.log('[Migration] 🔧 Using DATABASE_PASSWORD to construct connection string');
+} else if (process.env.DATABASE_URL) {
+  // Use full connection string if provided
+  connectionString = process.env.DATABASE_URL;
+  console.log('[Migration] 🔧 Using DATABASE_URL');
+} else {
+  console.log('[Migration] ⏭️  No DATABASE_PASSWORD or DATABASE_URL - skipping migration');
   process.exit(0);
 }
 
 console.log('[Migration] 🔧 Running PostgreSQL migrations...');
-console.log('[Migration] Database URL:', process.env.DATABASE_URL?.replace(/:[^:@]+@/, ':****@'));
-
-// Parse connection string to force IPv4
-// Supabase direct connection uses IPv6 which Railway doesn't support
-// Use the pooler connection string instead (aws-0-*.pooler.supabase.com)
-const connectionString = process.env.DATABASE_URL;
+console.log('[Migration] Database URL:', connectionString.replace(/:[^:@]+@/, ':****@'));
 
 // Check if using direct connection (db.*.supabase.co) and warn
 if (connectionString.includes('db.') && connectionString.includes('.supabase.co')) {
-  console.warn('[Migration] ⚠️  WARNING: Using direct connection URL');
+  console.warn('[Migration] ⚠️  WARNING: Using direct connection URL (IPv6)');
   console.warn('[Migration] ⚠️  Railway may not support IPv6');
-  console.warn('[Migration] ⚠️  Consider using Session Pooler URL instead');
-  console.warn('[Migration] ⚠️  Format: postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres');
+  console.warn('[Migration] ⚠️  Use DATABASE_PASSWORD env var instead');
 }
 
 const pool = new Pool({

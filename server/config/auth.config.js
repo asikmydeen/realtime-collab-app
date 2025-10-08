@@ -8,9 +8,19 @@ const { Pool } = pg;
 // Generate a secure secret if not provided
 const authSecret = process.env.AUTH_SECRET || crypto.randomBytes(32).toString('hex');
 
-// Validate DATABASE_URL
-if (!process.env.DATABASE_URL) {
-  throw new Error('❌ DATABASE_URL environment variable is required for Supabase PostgreSQL');
+// Construct DATABASE_URL from password or use full URL if provided
+let connectionString;
+
+if (process.env.DATABASE_PASSWORD) {
+  // Build connection string from password
+  connectionString = `postgresql://postgres.zcpgprqeocumhgttqmhr:${process.env.DATABASE_PASSWORD}@aws-1-us-east-2.pooler.supabase.com:5432/postgres`;
+  console.log('[Auth] 🔧 Using DATABASE_PASSWORD to construct connection string');
+} else if (process.env.DATABASE_URL) {
+  // Use full connection string if provided
+  connectionString = process.env.DATABASE_URL;
+  console.log('[Auth] 🔧 Using DATABASE_URL');
+} else {
+  throw new Error('❌ DATABASE_PASSWORD or DATABASE_URL environment variable is required for Supabase PostgreSQL');
 }
 
 console.log('='.repeat(60));
@@ -20,10 +30,10 @@ console.log('[Auth] Environment:', process.env.NODE_ENV || 'production');
 
 // Create PostgreSQL connection pool
 console.log('[Auth] 🔧 Setting up PostgreSQL with Kysely...');
-console.log('[Auth] Database URL:', process.env.DATABASE_URL?.replace(/:[^:@]+@/, ':****@'));
+console.log('[Auth] Database URL:', connectionString.replace(/:[^:@]+@/, ':****@'));
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: connectionString,
   ssl: { rejectUnauthorized: false },
   max: 10,
   idleTimeoutMillis: 30000,

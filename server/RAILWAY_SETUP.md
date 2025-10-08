@@ -1,41 +1,47 @@
 # Railway Deployment Setup
 
-## Important: Supabase Connection String
+## Quick Setup - Just Add Your Database Password
 
-Railway **does not support IPv6** connections. You must use the **Session Pooler** connection string from Supabase, not the direct connection string.
+The easiest way to set up Supabase PostgreSQL on Railway:
+
+### Step 1: Get Your Database Password
+
+1. Go to your Supabase project: https://supabase.com/dashboard/project/zcpgprqeocumhgttqmhr
+2. Click **Settings** (⚙️) → **Database**
+3. Find your database password (you set this when creating the project)
+
+### Step 2: Add to Railway
+
+1. Go to Railway: https://railway.app
+2. Select your **server** service
+3. Click **Variables** tab
+4. Add a new variable:
+   - **Variable name**: `DATABASE_PASSWORD`
+   - **Value**: (paste your database password)
+5. Click **Add**
+
+Railway will automatically redeploy.
+
+**That's it!** The connection string is built automatically using the Supabase Session Pooler (IPv4).
+
+---
+
+## Alternative: Use Full Connection String
+
+If you prefer to provide the full connection string:
 
 ### ❌ WRONG - Direct Connection (IPv6)
 ```
 postgresql://postgres:password@db.zcpgprqeocumhgttqmhr.supabase.co:5432/postgres
 ```
-This will fail with: `ENETUNREACH` error
+This will fail with: `ENETUNREACH` error on Railway
 
 ### ✅ CORRECT - Session Pooler (IPv4)
 ```
-postgresql://postgres.zcpgprqeocumhgttqmhr:password@aws-0-us-west-1.pooler.supabase.com:6543/postgres
+postgresql://postgres.zcpgprqeocumhgttqmhr:password@aws-1-us-east-2.pooler.supabase.com:5432/postgres
 ```
 
-## How to Get the Correct Connection String
-
-1. Go to your Supabase project: https://supabase.com/dashboard/project/zcpgprqeocumhgttqmhr
-2. Click **Settings** (⚙️) → **Database**
-3. Scroll to **Connection string** section
-4. Select **Session pooler** tab (NOT "Direct connection")
-5. Select **URI** format
-6. Copy the connection string
-7. Replace `[YOUR-PASSWORD]` with your actual database password
-
-## Add to Railway
-
-1. Go to Railway: https://railway.app
-2. Select your **server** service
-3. Click **Variables** tab
-4. Add or update:
-   - **Variable name**: `DATABASE_URL`
-   - **Value**: (paste the Session Pooler connection string)
-5. Click **Add** or **Update**
-
-Railway will automatically redeploy.
+Add as `DATABASE_URL` environment variable in Railway.
 
 ## Verify It's Working
 
@@ -56,4 +62,3 @@ After deployment, check Railway logs for:
 ```
 
 If you see `ENETUNREACH` error, you're using the wrong connection string (direct instead of pooler).
-
