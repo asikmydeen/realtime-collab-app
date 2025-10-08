@@ -12,9 +12,8 @@ const authSecret = process.env.AUTH_SECRET || crypto.randomBytes(32).toString('h
 let connectionString;
 
 if (process.env.DATABASE_PASSWORD) {
-  // Build connection string from password
-  // Session Pooler uses port 6543, not 5432
-  connectionString = `postgresql://postgres.zcpgprqeocumhgttqmhr:${process.env.DATABASE_PASSWORD}@aws-1-us-east-2.pooler.supabase.com:6543/postgres`;
+  // Build connection string from password using Session Pooler
+  connectionString = `postgresql://postgres.zcpgprqeocumhgttqmhr:${process.env.DATABASE_PASSWORD}@aws-1-us-east-2.pooler.supabase.com:5432/postgres`;
   console.log('[Auth] 🔧 Using DATABASE_PASSWORD to construct connection string');
 } else if (process.env.DATABASE_URL) {
   // Use full connection string if provided

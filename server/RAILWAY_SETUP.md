@@ -38,7 +38,7 @@ This will fail with: `ENETUNREACH` error on Railway
 
 ### ✅ CORRECT - Session Pooler (IPv4)
 ```
-postgresql://postgres.zcpgprqeocumhgttqmhr:password@aws-1-us-east-2.pooler.supabase.com:6543/postgres
+postgresql://postgres.zcpgprqeocumhgttqmhr:password@aws-1-us-east-2.pooler.supabase.com:5432/postgres
 ```
 
 Add as `DATABASE_URL` environment variable in Railway.
