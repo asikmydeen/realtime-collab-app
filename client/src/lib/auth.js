@@ -1,31 +1,31 @@
-import { createAuthClient } from 'better-auth/client';
 import { createSignal } from 'solid-js';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-// Create auth client with localStorage for cross-origin support
-export const authClient = createAuthClient({
-  baseURL: API_URL,
-  // Use localStorage instead of cookies for cross-origin
-  fetchOptions: {
-    credentials: 'include'
-  }
-});
+import { supabase } from './supabase';
 
 // Simple auth store for SolidJS
 const [sessionData, setSessionData] = createSignal(null);
 const [isLoading, setIsLoading] = createSignal(true);
 
-// Check session on load - silently fail if auth service is unavailable
-authClient.getSession().then(response => {
-  console.log('[Auth] Session loaded:', response);
-  // Better Auth returns { data: { user, session }, error }
-  setSessionData(response.data);
+// Check session on load
+supabase.auth.getSession().then(({ data: { session } }) => {
+  console.log('[Supabase Auth] Session loaded:', session);
+  if (session) {
+    setSessionData({ user: session.user, session });
+  }
   setIsLoading(false);
 }).catch((error) => {
-  console.warn('[Auth] Auth service unavailable, continuing without authentication:', error.message);
+  console.warn('[Supabase Auth] Failed to load session:', error.message);
   setSessionData(null);
   setIsLoading(false);
+});
+
+// Listen for auth state changes
+supabase.auth.onAuthStateChange((event, session) => {
+  console.log('[Supabase Auth] Auth state changed:', event, session);
+  if (session) {
+    setSessionData({ user: session.user, session });
+  } else {
+    setSessionData(null);
+  }
 });
 
 // Export hooks
@@ -34,42 +34,64 @@ export const useIsLoading = () => isLoading;
 
 export const useSignIn = () => async (email, password) => {
   try {
-    const result = await authClient.signIn.email({ email, password });
-    console.log('[Auth] Sign in result:', result);
-    if (result.data) {
-      setSessionData(result.data);
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (error) throw error;
+
+    console.log('[Supabase Auth] Sign in successful:', data);
+    if (data.session) {
+      setSessionData({ user: data.user, session: data.session });
     }
-    return result;
+    return { data, error: null };
   } catch (error) {
-    console.error('Sign in error:', error);
-    throw error;
+    console.error('[Supabase Auth] Sign in error:', error);
+    return { data: null, error };
   }
 };
 
 export const useSignUp = () => async (email, password, name) => {
   try {
-    const result = await authClient.signUp.email({ email, password, name });
-    console.log('[Auth] Sign up result:', result);
-    if (result.data) {
-      setSessionData(result.data);
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name: name || email.split('@')[0]
+        }
+      }
+    });
+
+    if (error) throw error;
+
+    console.log('[Supabase Auth] Sign up successful:', data);
+    if (data.session) {
+      setSessionData({ user: data.user, session: data.session });
     }
-    return result;
+    return { data, error: null };
   } catch (error) {
-    console.error('Sign up error:', error);
-    throw error;
+    console.error('[Supabase Auth] Sign up error:', error);
+    return { data: null, error };
   }
 };
 
 // Refresh session from server
 export const refreshSession = async () => {
   try {
-    const response = await authClient.getSession();
-    console.log('[Auth] Session refreshed:', response);
-    // Better Auth returns { data: { user, session }, error }
-    setSessionData(response.data);
-    return response.data;
+    const { data: { session }, error } = await supabase.auth.getSession();
+
+    if (error) throw error;
+
+    console.log('[Supabase Auth] Session refreshed:', session);
+    if (session) {
+      setSessionData({ user: session.user, session });
+      return { user: session.user, session };
+    }
+    return null;
   } catch (error) {
-    console.error('[Auth] Failed to refresh session:', error);
+    console.error('[Supabase Auth] Failed to refresh session:', error);
     setSessionData(null);
     return null;
   }
@@ -77,10 +99,11 @@ export const refreshSession = async () => {
 
 export const useSignOut = () => async () => {
   try {
-    await authClient.signOut();
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
     setSessionData(null);
   } catch (error) {
-    console.error('Sign out error:', error);
+    console.error('[Supabase Auth] Sign out error:', error);
     throw error;
   }
 };
@@ -93,7 +116,8 @@ export const useUser = () => {
 // Get the session token for WebSocket authentication
 export const getSessionToken = () => {
   const session = sessionData();
-  return session?.session?.token || null;
+  // Supabase uses access_token
+  return session?.session?.access_token || null;
 };
 
 export const session = sessionData;

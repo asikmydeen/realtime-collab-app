@@ -39,6 +39,31 @@ export async function tableExists(tableName) {
   }
 }
 
+/**
+ * Verify a user's session token
+ * @param {string} token - JWT token from client
+ * @returns {Promise<{user: object} | null>}
+ */
+export async function verifySession(token) {
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      console.log('[Supabase Auth] ❌ Invalid token:', error?.message);
+      return null;
+    }
+
+    console.log('[Supabase Auth] ✅ User verified:', user.email);
+    return { user };
+  } catch (error) {
+    console.error('[Supabase Auth] ❌ Error verifying session:', error);
+    return null;
+  }
+}
+
 console.log('[Supabase] Client initialized');
 console.log('[Supabase] URL:', supabaseUrl);
-

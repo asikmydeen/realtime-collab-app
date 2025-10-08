@@ -17,7 +17,7 @@ import { GeoDrawingPersistence } from './geoDrawingPersistence.js';
 import { ActivityPersistence } from './activityPersistence.js';
 import { UserIdentityManager } from './userIdentity.js';
 import { initializeRedis } from './redisClient.js';
-import { authHandler, verifySession } from './config/auth.config.js';
+import { verifySession } from './config/supabase.config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -53,15 +53,8 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '50mb' }));
 
-// Auth routes - wrap in try-catch to prevent crashes
-app.all('/api/auth/*', async (req, res) => {
-  try {
-    await authHandler(req, res);
-  } catch (error) {
-    console.error('[Auth] Handler error:', error);
-    res.status(500).json({ error: 'Authentication service unavailable' });
-  }
-});
+// Auth is now handled client-side with Supabase
+// No server-side auth routes needed - Supabase handles everything
 
 // Initialize Redis
 const redis = await initializeRedis();
