@@ -251,15 +251,18 @@ connectionManager.on('connection', async (ws, req) => {
       if (sessionResult) {
         console.log('[Auth] 🔍 Session result structure:', JSON.stringify(sessionResult, null, 2));
 
-        // Better Auth returns { session, user } or just { user }
+        // Supabase Auth returns { user }
         const user = sessionResult.user;
 
         if (user) {
           userId = user.id;
-          userName = user.name || user.displayName || user.email?.split('@')[0] || 'User';
+          // Supabase stores custom data in user_metadata
+          userName = user.user_metadata?.name || user.email?.split('@')[0] || 'User';
           userHash = `auth_${userId}`; // Use auth-based hash
           isAuthenticated = true;
           console.log(`[Auth] ✅ Authenticated user: ${userName} (${userId})`);
+          console.log(`[Auth] 📧 Email: ${user.email}`);
+          console.log(`[Auth] 📝 Metadata:`, user.user_metadata);
         } else {
           console.log(`[Auth] ❌ No user in session result`);
         }
@@ -1266,9 +1269,9 @@ async function handleCreateActivity(clientId, message) {
       address: message.address,
       street: message.street,
       ownerId: client.userHash, // Set persistent owner
-      ownerName: client.username,
+      ownerName: client.userName || client.username || 'Anonymous', // Use authenticated name first
       creatorId: clientId,
-      creatorName: client.username
+      creatorName: client.userName || client.username || 'Anonymous'
     });
 
     console.log(`[Activity] Created: ${activity.id} at ${activity.street} by owner ${client.userHash} (client: ${clientId}`);
@@ -1374,7 +1377,7 @@ async function handleJoinActivity(clientId, message) {
   broadcastToActivity(message.activityId, {
     type: 'participantJoined',
     clientId,
-    username: client.username
+    username: client.userName || client.username || 'Anonymous'
   }, clientId);
 
   console.log(`[Activity] ${clientId} joined activity ${message.activityId} with ${participants.size - 1} other participants`);
@@ -1393,7 +1396,7 @@ function handleLeaveActivity(clientId, message) {
   broadcastToActivity(activityId, {
     type: 'participantLeft',
     clientId,
-    username: client.username
+    username: client.userName || client.username || 'Anonymous'
   }, clientId);
 
   // Update participant count
