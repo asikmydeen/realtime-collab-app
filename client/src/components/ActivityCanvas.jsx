@@ -746,18 +746,15 @@ export function ActivityCanvas(props) {
       height: '100%',
       'max-width': isMobile ? '100%' : '1400px',
       'max-height': isMobile ? '100%' : '90vh',
-      background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-      'border-radius': isMobile ? '0' : '24px',
-      'box-shadow': '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+      background: 'transparent',
       display: 'flex',
       'flex-direction': 'column',
       overflow: 'visible',
       animation: 'modalSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-      border: isMobile ? 'none' : '1px solid rgba(148, 163, 184, 0.1)',
       position: 'relative'
     },
     header: {
-      background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
+      background: 'transparent',
       padding: isMobile ? '16px 20px' : '20px 32px',
       'border-bottom': '1px solid rgba(148, 163, 184, 0.15)',
       'flex-shrink': 0,
@@ -765,8 +762,7 @@ export function ActivityCanvas(props) {
       'flex-direction': 'column',
       gap: '12px',
       'z-index': 10,
-      position: 'relative',
-      'border-radius': isMobile ? '0' : '24px 24px 0 0'
+      position: 'relative'
     },
     headerTop: {
       display: 'flex',
@@ -831,9 +827,8 @@ export function ActivityCanvas(props) {
       display: 'flex',
       'min-height': 0,
       position: 'relative',
-      background: '#0f172a',
-      overflow: 'hidden',
-      'border-radius': isMobile ? '0' : '0 0 24px 24px'
+      background: 'transparent',
+      overflow: 'hidden'
     },
     canvasWrapper: {
       flex: 1,
@@ -898,6 +893,17 @@ export function ActivityCanvas(props) {
   return (
     <div style={modernStyles.overlay} onClick={(e) => e.target === e.currentTarget && props.onClose()}>
       <div style={modernStyles.modal} onClick={(e) => e.stopPropagation()}>
+        <div style={{
+          display: 'flex',
+          'flex-direction': 'column',
+          width: '100%',
+          height: '100%',
+          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+          'border-radius': isMobile ? '0' : '24px',
+          'box-shadow': '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+          border: isMobile ? 'none' : '1px solid rgba(148, 163, 184, 0.1)',
+          overflow: 'hidden'
+        }}>
         {/* Header */}
         <div style={modernStyles.header}>
           <div style={modernStyles.headerTop}>
@@ -1796,6 +1802,7 @@ export function ActivityCanvas(props) {
             }
           }
         `}</style>
+        </div>
       </div>
     </div>
   );
