@@ -751,9 +751,10 @@ export function ActivityCanvas(props) {
       'box-shadow': '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
       display: 'flex',
       'flex-direction': 'column',
-      overflow: 'hidden',
+      overflow: 'visible',
       animation: 'modalSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-      border: isMobile ? 'none' : '1px solid rgba(148, 163, 184, 0.1)'
+      border: isMobile ? 'none' : '1px solid rgba(148, 163, 184, 0.1)',
+      position: 'relative'
     },
     header: {
       background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
@@ -762,7 +763,10 @@ export function ActivityCanvas(props) {
       'flex-shrink': 0,
       display: 'flex',
       'flex-direction': 'column',
-      gap: '12px'
+      gap: '12px',
+      'z-index': 10,
+      position: 'relative',
+      'border-radius': isMobile ? '0' : '24px 24px 0 0'
     },
     headerTop: {
       display: 'flex',
@@ -796,7 +800,8 @@ export function ActivityCanvas(props) {
       display: 'flex',
       'align-items': 'center',
       gap: '12px',
-      'flex-shrink': 0
+      'flex-shrink': 0,
+      'z-index': 20
     },
     metadata: {
       display: 'flex',
@@ -826,7 +831,9 @@ export function ActivityCanvas(props) {
       display: 'flex',
       'min-height': 0,
       position: 'relative',
-      background: '#0f172a'
+      background: '#0f172a',
+      overflow: 'hidden',
+      'border-radius': isMobile ? '0' : '0 0 24px 24px'
     },
     canvasWrapper: {
       flex: 1,

@@ -13,7 +13,7 @@ export function ActivityControls(props) {
       gap: '12px',
       animation: 'slideDown 0.3s ease-out',
       'max-width': '280px',
-      'z-index': 100
+      'z-index': 1000
     },
     button: {
       padding: '12px 20px',
