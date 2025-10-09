@@ -729,273 +729,272 @@ export function ActivityCanvas(props) {
   const isMobile = window.innerWidth <= 768;
 
   const modernStyles = {
-    container: {
+    overlay: {
       position: 'fixed',
       inset: 0,
-      background: 'rgba(0, 0, 0, 0.85)',
-      'backdrop-filter': 'blur(8px)',
-      'z-index': 50,
-      display: 'flex',
-      'flex-direction': 'column',
-      animation: 'fadeIn 0.2s ease-out'
-    },
-    header: {
+      background: 'rgba(0, 0, 0, 0.75)',
+      'backdrop-filter': 'blur(12px)',
+      'z-index': 9999,
       display: 'flex',
       'align-items': 'center',
+      'justify-content': 'center',
+      padding: isMobile ? '0' : '20px',
+      animation: 'fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+    },
+    modal: {
+      width: '100%',
+      height: '100%',
+      'max-width': isMobile ? '100%' : '1400px',
+      'max-height': isMobile ? '100%' : '90vh',
+      background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+      'border-radius': isMobile ? '0' : '24px',
+      'box-shadow': '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+      display: 'flex',
+      'flex-direction': 'column',
+      overflow: 'hidden',
+      animation: 'modalSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+      border: isMobile ? 'none' : '1px solid rgba(148, 163, 184, 0.1)'
+    },
+    header: {
+      background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
+      padding: isMobile ? '20px' : '24px 32px',
+      'border-bottom': '1px solid rgba(148, 163, 184, 0.15)',
+      'flex-shrink': 0
+    },
+    headerTop: {
+      display: 'flex',
+      'align-items': 'flex-start',
       'justify-content': 'space-between',
-      padding: isMobile ? '16px 20px' : '20px 32px',
-      background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-      'border-bottom': '1px solid rgba(148, 163, 184, 0.1)',
-      'box-shadow': '0 4px 6px -1px rgba(0, 0, 0, 0.2)',
-      'flex-shrink': 0,
-      'min-height': isMobile ? '70px' : '80px'
+      gap: '16px',
+      'margin-bottom': '16px'
+    },
+    titleSection: {
+      flex: 1,
+      'min-width': 0
+    },
+    title: {
+      margin: 0,
+      'font-size': isMobile ? '24px' : '32px',
+      'font-weight': '800',
+      color: '#ffffff',
+      'line-height': '1.2',
+      'margin-bottom': '8px',
+      display: 'flex',
+      'align-items': 'center',
+      gap: '12px',
+      'letter-spacing': '-0.02em'
+    },
+    subtitle: {
+      'font-size': isMobile ? '14px' : '16px',
+      color: '#94a3b8',
+      'line-height': '1.5',
+      'max-width': '600px'
+    },
+    headerActions: {
+      display: 'flex',
+      'align-items': 'center',
+      gap: '12px',
+      'flex-shrink': 0
+    },
+    metadata: {
+      display: 'flex',
+      'align-items': 'center',
+      gap: isMobile ? '16px' : '24px',
+      'flex-wrap': 'wrap',
+      'padding-top': '16px',
+      'border-top': '1px solid rgba(148, 163, 184, 0.1)'
+    },
+    metadataItem: {
+      display: 'flex',
+      'align-items': 'center',
+      gap: '8px',
+      'font-size': isMobile ? '13px' : '14px',
+      color: '#cbd5e1',
+      background: 'rgba(51, 65, 85, 0.5)',
+      padding: '8px 16px',
+      'border-radius': '12px',
+      border: '1px solid rgba(148, 163, 184, 0.1)'
     },
     mainContent: {
       flex: 1,
       display: 'flex',
-      padding: isMobile ? '12px' : '20px 32px 20px 32px',
-      gap: isMobile ? '12px' : '20px',
       'min-height': 0,
-      'overflow': 'hidden'
+      position: 'relative',
+      background: '#0f172a'
+    },
+    canvasWrapper: {
+      flex: 1,
+      display: 'flex',
+      'flex-direction': 'column',
+      'min-width': 0,
+      position: 'relative'
     },
     canvasContainer: {
       flex: 1,
+      margin: isMobile ? '16px' : '24px',
       background: '#ffffff',
-      'border-radius': isMobile ? '12px' : '16px',
-      'box-shadow': '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)',
+      'border-radius': '16px',
+      'box-shadow': '0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.3)',
       overflow: 'hidden',
       position: 'relative',
       border: '2px solid rgba(148, 163, 184, 0.2)'
     },
-    participantsButton: {
-      position: 'relative',
-      padding: '10px',
-      'border-radius': '50%',
-      background: 'rgba(55, 65, 81, 0.5)',
-      color: 'white',
-      border: 'none',
-      cursor: 'pointer',
-      transition: 'all 0.2s',
-      'font-size': '20px'
+    sidebar: {
+      width: isMobile ? '100%' : '320px',
+      background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+      'border-left': isMobile ? 'none' : '1px solid rgba(148, 163, 184, 0.1)',
+      display: 'flex',
+      'flex-direction': 'column',
+      'overflow-y': 'auto',
+      'flex-shrink': 0
     },
-    closeButton: {
-      padding: '10px',
-      'border-radius': '50%',
-      background: 'rgba(55, 65, 81, 0.5)',
-      color: 'rgba(209, 213, 219, 1)',
+    button: {
+      padding: '12px 20px',
+      'border-radius': '12px',
       border: 'none',
+      'font-weight': '600',
+      'font-size': '14px',
       cursor: 'pointer',
-      transition: 'all 0.2s'
-    },
-    badge: {
-      position: 'absolute',
-      top: '-4px',
-      right: '-4px',
-      background: '#3B82F6',
-      color: 'white',
-      'font-size': '12px',
-      'border-radius': '50%',
-      width: '20px',
-      height: '20px',
+      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
       display: 'flex',
       'align-items': 'center',
-      'justify-content': 'center',
-      'font-weight': 'bold'
+      gap: '8px',
+      'white-space': 'nowrap'
+    },
+    primaryButton: {
+      background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+      color: 'white',
+      'box-shadow': '0 4px 12px rgba(59, 130, 246, 0.4)'
+    },
+    dangerButton: {
+      background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+      color: 'white',
+      'box-shadow': '0 4px 12px rgba(239, 68, 68, 0.4)'
+    },
+    secondaryButton: {
+      background: 'rgba(51, 65, 85, 0.8)',
+      color: '#e2e8f0',
+      border: '1px solid rgba(148, 163, 184, 0.2)'
     }
   };
 
   return (
-    <div style={modernStyles.container}>
-      {/* Header Bar */}
-      <div style={modernStyles.header}>
-        {/* Left Section - Activity Info */}
-        <div style={{
-          flex: 1,
-          'min-width': 0,
-          display: 'flex',
-          'flex-direction': 'column',
-          gap: '8px',
-          'padding-right': '16px'
-        }}>
-          {/* Activity Title */}
-          <h1 style={{
-            margin: 0,
-            'font-size': isMobile ? '20px' : '26px',
-            'font-weight': '700',
-            color: '#ffffff',
-            'line-height': '1.2',
-            display: 'flex',
-            'align-items': 'center',
-            gap: '10px'
-          }}>
-            <span style={{ 'font-size': isMobile ? '24px' : '30px', 'flex-shrink': 0 }}>🎨</span>
-            <span style={{
-              overflow: 'hidden',
-              'text-overflow': 'ellipsis',
-              'white-space': 'nowrap',
-              flex: 1,
-              'min-width': 0
-            }}>
-              {props.activity.title || 'Untitled Canvas'}
-            </span>
-          </h1>
+    <div style={modernStyles.overlay} onClick={(e) => e.target === e.currentTarget && props.onClose()}>
+      <div style={modernStyles.modal} onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div style={modernStyles.header}>
+          <div style={modernStyles.headerTop}>
+            {/* Title Section */}
+            <div style={modernStyles.titleSection}>
+              <h1 style={modernStyles.title}>
+                <span style={{ 'font-size': isMobile ? '28px' : '36px' }}>🎨</span>
+                <span style={{
+                  overflow: 'hidden',
+                  'text-overflow': 'ellipsis',
+                  'white-space': 'nowrap'
+                }}>
+                  {props.activity.title || 'Untitled Canvas'}
+                </span>
+              </h1>
+              <Show when={props.activity.description}>
+                <p style={modernStyles.subtitle}>
+                  {props.activity.description}
+                </p>
+              </Show>
+            </div>
 
-          {/* Activity Metadata */}
-          <div style={{
-            display: 'flex',
-            'align-items': 'center',
-            gap: '16px',
-            'flex-wrap': 'wrap',
-            'font-size': isMobile ? '13px' : '15px',
-            color: '#94a3b8'
-          }}>
-            {/* Location */}
-            <div style={{
-              display: 'flex',
-              'align-items': 'center',
-              gap: '6px',
-              'max-width': isMobile ? '180px' : '300px',
-              'min-width': 0
-            }}>
-              <span style={{ 'font-size': '16px', 'flex-shrink': 0 }}>📍</span>
+            {/* Header Actions */}
+            <div style={modernStyles.headerActions}>
+              <Show when={!isMobile}>
+                <button
+                  onClick={() => setShowParticipants(!showParticipants())}
+                  style={{
+                    ...modernStyles.button,
+                    ...(showParticipants() ? modernStyles.primaryButton : modernStyles.secondaryButton)
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                >
+                  <span style={{ 'font-size': '18px' }}>👥</span>
+                  <span>{participants().size + 1}</span>
+                </button>
+              </Show>
+
+              <button
+                onClick={props.onClose}
+                style={{
+                  ...modernStyles.button,
+                  ...modernStyles.dangerButton
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 6px 16px rgba(239, 68, 68, 0.5)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.4)';
+                }}
+              >
+                <span style={{ 'font-size': '18px' }}>✕</span>
+                <Show when={!isMobile}>
+                  <span>Close</span>
+                </Show>
+              </button>
+            </div>
+          </div>
+
+          {/* Metadata */}
+          <div style={modernStyles.metadata}>
+            <div style={modernStyles.metadataItem}>
+              <span style={{ 'font-size': '18px' }}>📍</span>
               <span style={{
                 overflow: 'hidden',
                 'text-overflow': 'ellipsis',
-                'white-space': 'nowrap'
+                'white-space': 'nowrap',
+                'max-width': isMobile ? '150px' : '250px'
               }}>
                 {props.activity.street || 'Unknown Location'}
               </span>
             </div>
 
-            {/* Owner */}
             <Show when={props.activity.ownerName && props.activity.ownerName !== 'Anonymous'}>
-              <div style={{ display: 'flex', 'align-items': 'center', gap: '6px' }}>
-                <span style={{ 'font-size': '16px' }}>👤</span>
+              <div style={modernStyles.metadataItem}>
+                <span style={{ 'font-size': '18px' }}>👤</span>
                 <span>by {props.activity.ownerName}</span>
               </div>
             </Show>
 
-            {/* Participants Count */}
-            <div style={{ display: 'flex', 'align-items': 'center', gap: '6px' }}>
-              <span style={{ 'font-size': '16px' }}>👥</span>
-              <span>{participants().size + 1} {participants().size === 0 ? 'person' : 'people'}</span>
+            <div style={modernStyles.metadataItem}>
+              <span style={{ 'font-size': '18px' }}>🎯</span>
+              <span>
+                {props.wsManager?.userHash === props.activity?.ownerId ? 'You own this' :
+                 canContribute() ? 'Can contribute' : 'View only'}
+              </span>
             </div>
+
+            <Show when={isMobile && props.wsManager?.userHash === props.activity?.ownerId && contributionRequests().length > 0}>
+              <button
+                onClick={() => setShowMobileRequests(true)}
+                style={{
+                  ...modernStyles.metadataItem,
+                  ...modernStyles.dangerButton,
+                  cursor: 'pointer',
+                  animation: 'pulse 2s infinite'
+                }}
+              >
+                <span style={{ 'font-size': '18px' }}>🔔</span>
+                <span>{contributionRequests().length} request{contributionRequests().length !== 1 ? 's' : ''}</span>
+              </button>
+            </Show>
           </div>
         </div>
 
-        {/* Right Section - Action Buttons */}
-        <div style={{
-          display: 'flex',
-          'align-items': 'center',
-          gap: isMobile ? '8px' : '12px',
-          'flex-shrink': 0
-        }}>
-          {/* Mobile contribution requests notification */}
-          <Show when={isMobile && props.wsManager?.userHash === props.activity?.ownerId && contributionRequests().length > 0}>
-            <button
-              onClick={() => setShowMobileRequests(true)}
-              style={{
-                padding: '10px 14px',
-                background: '#ef4444',
-                color: 'white',
-                border: 'none',
-                'border-radius': '10px',
-                cursor: 'pointer',
-                'font-size': '16px',
-                'font-weight': '600',
-                display: 'flex',
-                'align-items': 'center',
-                gap: '6px',
-                'box-shadow': '0 2px 8px rgba(239, 68, 68, 0.4)',
-                transition: 'all 0.2s',
-                animation: 'pulse 2s infinite'
-              }}
-            >
-              <span style={{ 'font-size': '18px' }}>🔔</span>
-              <span>{contributionRequests().length}</span>
-            </button>
-          </Show>
-
-          {/* Participants Toggle Button */}
-          <Show when={!isMobile}>
-            <button
-              onClick={() => setShowParticipants(!showParticipants())}
-              style={{
-                padding: '10px 16px',
-                background: showParticipants() ? '#3b82f6' : '#475569',
-                color: 'white',
-                border: 'none',
-                'border-radius': '10px',
-                cursor: 'pointer',
-                'font-size': '14px',
-                'font-weight': '600',
-                display: 'flex',
-                'align-items': 'center',
-                gap: '8px',
-                transition: 'all 0.2s',
-                'box-shadow': showParticipants()
-                  ? '0 2px 8px rgba(59, 130, 246, 0.4)'
-                  : '0 2px 4px rgba(0, 0, 0, 0.2)'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'scale(1.05)';
-                e.currentTarget.style.boxShadow = showParticipants()
-                  ? '0 4px 12px rgba(59, 130, 246, 0.5)'
-                  : '0 4px 8px rgba(0, 0, 0, 0.3)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.boxShadow = showParticipants()
-                  ? '0 2px 8px rgba(59, 130, 246, 0.4)'
-                  : '0 2px 4px rgba(0, 0, 0, 0.2)';
-              }}
-            >
-              <span style={{ 'font-size': '18px' }}>👥</span>
-              <span>{participants().size + 1}</span>
-            </button>
-          </Show>
-
-          {/* Close Button */}
-          <button
-            onClick={props.onClose}
-            style={{
-              padding: isMobile ? '10px 14px' : '10px 16px',
-              background: '#ef4444',
-              color: 'white',
-              border: 'none',
-              'border-radius': '10px',
-              cursor: 'pointer',
-              'font-size': isMobile ? '20px' : '22px',
-              'font-weight': '700',
-              'line-height': 1,
-              display: 'flex',
-              'align-items': 'center',
-              'justify-content': 'center',
-              transition: 'all 0.2s',
-              'min-width': isMobile ? '44px' : '48px',
-              'min-height': isMobile ? '44px' : '48px',
-              'box-shadow': '0 2px 8px rgba(239, 68, 68, 0.4)'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#dc2626';
-              e.currentTarget.style.transform = 'scale(1.05)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.5)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#ef4444';
-              e.currentTarget.style.transform = 'scale(1)';
-              e.currentTarget.style.boxShadow = '0 2px 8px rgba(239, 68, 68, 0.4)';
-            }}
-          >
-            ✕
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div style={modernStyles.mainContent}>
-        {/* Canvas Container */}
-        <div ref={containerRef} style={modernStyles.canvasContainer}>
+        {/* Main Content */}
+        <div style={modernStyles.mainContent}>
+          {/* Canvas Wrapper */}
+          <div style={modernStyles.canvasWrapper}>
+            {/* Canvas Container */}
+            <div ref={containerRef} style={modernStyles.canvasContainer}>
           <canvas
             ref={drawingCanvasRef}
             style={{
@@ -1250,115 +1249,259 @@ export function ActivityCanvas(props) {
               </div>
             </div>
           </Show>
-        </div>
-
-        {/* Contribution Requests Panel (Owners) */}
-        <Show when={!isMobile && props.wsManager?.userHash === props.activity?.ownerId && contributionRequests().length > 0}>
-          <div style={{
-            width: '320px',
-            background: 'rgba(31, 41, 55, 0.5)',
-            'backdrop-filter': 'blur(10px)',
-            'border-radius': '12px',
-            padding: '16px',
-            animation: 'slideDown 0.3s ease-out'
-          }}>
-            <h4 style={{
-              color: 'white',
-              'font-weight': '600',
-              margin: '0 0 16px 0',
-              display: 'flex',
-              'align-items': 'center',
-              gap: '8px'
-            }}>
-              <span>📋</span>
-              <span>Contribution Requests ({contributionRequests().length})</span>
-            </h4>
-            <div style={{
-              display: 'flex',
-              'flex-direction': 'column',
-              gap: '8px',
-              'max-height': '240px',
-              'overflow-y': 'auto'
-            }}>
-              {contributionRequests().map(request => (
-                <div style={{
-                  background: 'rgba(55, 65, 81, 0.5)',
-                  'border-radius': '8px',
-                  padding: '12px',
-                  display: 'flex',
-                  'align-items': 'center',
-                  'justify-content': 'space-between'
-                }}>
-                  <span style={{ color: 'white', 'font-size': '14px' }}>
-                    User {request.clientId?.slice(-4) || 'Unknown'}
-                  </span>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      onClick={() => {
-                        if (props.wsManager) {
-                          props.wsManager.send({
-                            type: 'approveContributor',
-                            activityId: props.activity.id,
-                            userHash: request.userHash
-                          });
-                          setContributionRequests(prev =>
-                            prev.filter(r => r.userHash !== request.userHash)
-                          );
-                        }
-                      }}
-                      style={{
-                        padding: '4px 12px',
-                        background: '#10B981',
-                        color: 'white',
-                        'border-radius': '4px',
-                        'font-size': '14px',
-                        'font-weight': '500',
-                        border: 'none',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.target.style.background = '#059669';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.background = '#10B981';
-                      }}
-                    >
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => {
-                        setContributionRequests(prev =>
-                          prev.filter(r => r.userHash !== request.userHash)
-                        );
-                      }}
-                      style={{
-                        padding: '4px 12px',
-                        background: '#EF4444',
-                        color: 'white',
-                        'border-radius': '4px',
-                        'font-size': '14px',
-                        'font-weight': '500',
-                        border: 'none',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.target.style.background = '#DC2626';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.background = '#EF4444';
-                      }}
-                    >
-                      Decline
-                    </button>
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
-        </Show>
-      </div>
+
+          {/* Sidebar - Participants & Requests */}
+          <Show when={!isMobile && (showParticipants() || (props.wsManager?.userHash === props.activity?.ownerId && contributionRequests().length > 0))}>
+            <div style={modernStyles.sidebar}>
+              {/* Participants Section */}
+              <Show when={showParticipants()}>
+                <div style={{
+                  padding: '24px',
+                  'border-bottom': '1px solid rgba(148, 163, 184, 0.1)'
+                }}>
+                  <h3 style={{
+                    margin: '0 0 16px 0',
+                    'font-size': '18px',
+                    'font-weight': '700',
+                    color: '#ffffff',
+                    display: 'flex',
+                    'align-items': 'center',
+                    gap: '10px'
+                  }}>
+                    <span style={{ 'font-size': '22px' }}>👥</span>
+                    <span>Participants ({participants().size + 1})</span>
+                  </h3>
+
+                  <div style={{
+                    display: 'flex',
+                    'flex-direction': 'column',
+                    gap: '10px'
+                  }}>
+                    {/* Current User */}
+                    <div style={{
+                      background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.2) 100%)',
+                      border: '1px solid rgba(59, 130, 246, 0.4)',
+                      'border-radius': '12px',
+                      padding: '14px 16px',
+                      display: 'flex',
+                      'align-items': 'center',
+                      'justify-content': 'space-between'
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        'align-items': 'center',
+                        gap: '10px'
+                      }}>
+                        <div style={{
+                          width: '36px',
+                          height: '36px',
+                          'border-radius': '50%',
+                          background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                          display: 'flex',
+                          'align-items': 'center',
+                          'justify-content': 'center',
+                          'font-size': '18px'
+                        }}>
+                          👤
+                        </div>
+                        <span style={{
+                          color: '#ffffff',
+                          'font-weight': '600',
+                          'font-size': '15px'
+                        }}>
+                          You
+                        </span>
+                      </div>
+                      <Show when={props.wsManager?.userHash === props.activity?.ownerId}>
+                        <span style={{
+                          background: 'rgba(34, 197, 94, 0.2)',
+                          color: '#6ee7b7',
+                          padding: '4px 12px',
+                          'border-radius': '8px',
+                          'font-size': '12px',
+                          'font-weight': '600',
+                          border: '1px solid rgba(34, 197, 94, 0.3)'
+                        }}>
+                          Owner
+                        </span>
+                      </Show>
+                    </div>
+
+                    {/* Other Participants */}
+                    {Array.from(participants()).map(([id, participant]) => (
+                      <div style={{
+                        background: 'rgba(51, 65, 85, 0.5)',
+                        border: '1px solid rgba(148, 163, 184, 0.1)',
+                        'border-radius': '12px',
+                        padding: '14px 16px',
+                        display: 'flex',
+                        'align-items': 'center',
+                        gap: '10px'
+                      }}>
+                        <div style={{
+                          width: '36px',
+                          height: '36px',
+                          'border-radius': '50%',
+                          background: 'rgba(148, 163, 184, 0.2)',
+                          display: 'flex',
+                          'align-items': 'center',
+                          'justify-content': 'center',
+                          'font-size': '18px'
+                        }}>
+                          👤
+                        </div>
+                        <span style={{
+                          color: '#cbd5e1',
+                          'font-weight': '500',
+                          'font-size': '15px'
+                        }}>
+                          {participant.username || `User ${id.slice(-4)}`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Show>
+
+              {/* Contribution Requests Section (Owners Only) */}
+              <Show when={props.wsManager?.userHash === props.activity?.ownerId && contributionRequests().length > 0}>
+                <div style={{
+                  padding: '24px'
+                }}>
+                  <h3 style={{
+                    margin: '0 0 16px 0',
+                    'font-size': '18px',
+                    'font-weight': '700',
+                    color: '#ffffff',
+                    display: 'flex',
+                    'align-items': 'center',
+                    gap: '10px'
+                  }}>
+                    <span style={{ 'font-size': '22px' }}>🔔</span>
+                    <span>Requests ({contributionRequests().length})</span>
+                  </h3>
+
+                  <div style={{
+                    display: 'flex',
+                    'flex-direction': 'column',
+                    gap: '12px'
+                  }}>
+                    {contributionRequests().map(request => (
+                      <div style={{
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        'border-radius': '12px',
+                        padding: '16px',
+                        animation: 'slideIn 0.3s ease-out'
+                      }}>
+                        <div style={{
+                          display: 'flex',
+                          'align-items': 'center',
+                          gap: '10px',
+                          'margin-bottom': '12px'
+                        }}>
+                          <div style={{
+                            width: '32px',
+                            height: '32px',
+                            'border-radius': '50%',
+                            background: 'rgba(239, 68, 68, 0.2)',
+                            display: 'flex',
+                            'align-items': 'center',
+                            'justify-content': 'center',
+                            'font-size': '16px'
+                          }}>
+                            👤
+                          </div>
+                          <span style={{
+                            color: '#ffffff',
+                            'font-weight': '600',
+                            'font-size': '14px'
+                          }}>
+                            User {request.clientId?.slice(-4) || 'Unknown'}
+                          </span>
+                        </div>
+
+                        <div style={{
+                          display: 'flex',
+                          gap: '8px'
+                        }}>
+                          <button
+                            onClick={() => {
+                              if (props.wsManager) {
+                                props.wsManager.send({
+                                  type: 'approveContributor',
+                                  activityId: props.activity.id,
+                                  userHash: request.userHash
+                                });
+                                setContributionRequests(prev =>
+                                  prev.filter(r => r.userHash !== request.userHash)
+                                );
+                              }
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: '10px',
+                              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                              color: 'white',
+                              'border-radius': '8px',
+                              'font-size': '14px',
+                              'font-weight': '600',
+                              border: 'none',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s',
+                              'box-shadow': '0 2px 8px rgba(16, 185, 129, 0.3)'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = 'translateY(-2px)';
+                              e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.4)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'translateY(0)';
+                              e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.3)';
+                            }}
+                          >
+                            ✓ Approve
+                          </button>
+                          <button
+                            onClick={() => {
+                              setContributionRequests(prev =>
+                                prev.filter(r => r.userHash !== request.userHash)
+                              );
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: '10px',
+                              background: 'rgba(51, 65, 85, 0.8)',
+                              color: '#e2e8f0',
+                              'border-radius': '8px',
+                              'font-size': '14px',
+                              'font-weight': '600',
+                              border: '1px solid rgba(148, 163, 184, 0.2)',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = 'rgba(71, 85, 105, 0.9)';
+                              e.currentTarget.style.transform = 'translateY(-2px)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = 'rgba(51, 65, 85, 0.8)';
+                              e.currentTarget.style.transform = 'translateY(0)';
+                            }}
+                          >
+                            ✕ Decline
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Show>
+            </div>
+          </Show>
+        </div>
 
       {/* Participants Sidebar */}
       <Show when={showParticipants()}>
@@ -1577,38 +1720,61 @@ export function ActivityCanvas(props) {
         </div>
       </Show>
 
-      {/* Add CSS animations */}
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes slideUp {
-          from {
-            transform: ${isMobile ? 'translateY(100%)' : 'translateY(20px) translateX(-50%)'};
-            opacity: ${isMobile ? 1 : 0};
+        {/* CSS Animations */}
+        <style>{`
+          @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
           }
-          to {
-            transform: ${isMobile ? 'translateY(0)' : 'translateY(0) translateX(-50%)'};
-            opacity: 1;
+
+          @keyframes modalSlideIn {
+            from {
+              opacity: 0;
+              transform: ${isMobile ? 'translateY(100%)' : 'scale(0.95) translateY(20px)'};
+            }
+            to {
+              opacity: 1;
+              transform: ${isMobile ? 'translateY(0)' : 'scale(1) translateY(0)'};
+            }
           }
-        }
-        @keyframes slideDown {
-          from { transform: translateY(-20px); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
-        }
-        @keyframes pulse {
-          0% {
-            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+
+          @keyframes slideUp {
+            from {
+              transform: ${isMobile ? 'translateY(100%)' : 'translateY(20px) translateX(-50%)'};
+              opacity: ${isMobile ? 1 : 0};
+            }
+            to {
+              transform: ${isMobile ? 'translateY(0)' : 'translateY(0) translateX(-50%)'};
+              opacity: 1;
+            }
           }
-          70% {
-            box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+
+          @keyframes slideDown {
+            from { transform: translateY(-20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
           }
-          100% {
-            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+
+          @keyframes slideIn {
+            from {
+              transform: translateX(-10px);
+              opacity: 0;
+            }
+            to {
+              transform: translateX(0);
+              opacity: 1;
+            }
           }
-        }
-      `}</style>
+
+          @keyframes pulse {
+            0%, 100% {
+              box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            }
+            50% {
+              box-shadow: 0 0 0 12px rgba(239, 68, 68, 0);
+            }
+          }
+        `}</style>
+      </div>
     </div>
   );
 }
