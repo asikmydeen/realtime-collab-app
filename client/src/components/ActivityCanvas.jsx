@@ -757,16 +757,18 @@ export function ActivityCanvas(props) {
     },
     header: {
       background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
-      padding: isMobile ? '20px' : '24px 32px',
+      padding: isMobile ? '16px 20px' : '20px 32px',
       'border-bottom': '1px solid rgba(148, 163, 184, 0.15)',
-      'flex-shrink': 0
+      'flex-shrink': 0,
+      display: 'flex',
+      'flex-direction': 'column',
+      gap: '12px'
     },
     headerTop: {
       display: 'flex',
-      'align-items': 'flex-start',
+      'align-items': 'center',
       'justify-content': 'space-between',
-      gap: '16px',
-      'margin-bottom': '16px'
+      gap: '16px'
     },
     titleSection: {
       flex: 1,
@@ -774,21 +776,21 @@ export function ActivityCanvas(props) {
     },
     title: {
       margin: 0,
-      'font-size': isMobile ? '24px' : '32px',
+      'font-size': isMobile ? '20px' : '28px',
       'font-weight': '800',
       color: '#ffffff',
       'line-height': '1.2',
-      'margin-bottom': '8px',
       display: 'flex',
       'align-items': 'center',
-      gap: '12px',
+      gap: '8px',
       'letter-spacing': '-0.02em'
     },
     subtitle: {
-      'font-size': isMobile ? '14px' : '16px',
+      'font-size': isMobile ? '13px' : '15px',
       color: '#94a3b8',
-      'line-height': '1.5',
-      'max-width': '600px'
+      'line-height': '1.4',
+      'max-width': '600px',
+      'margin-top': '4px'
     },
     headerActions: {
       display: 'flex',
@@ -799,21 +801,25 @@ export function ActivityCanvas(props) {
     metadata: {
       display: 'flex',
       'align-items': 'center',
-      gap: isMobile ? '16px' : '24px',
+      gap: isMobile ? '8px' : '12px',
       'flex-wrap': 'wrap',
-      'padding-top': '16px',
-      'border-top': '1px solid rgba(148, 163, 184, 0.1)'
+      'overflow-x': 'auto',
+      'scrollbar-width': 'thin',
+      'scrollbar-color': 'rgba(148, 163, 184, 0.3) transparent',
+      'padding-bottom': '4px'
     },
     metadataItem: {
       display: 'flex',
       'align-items': 'center',
-      gap: '8px',
-      'font-size': isMobile ? '13px' : '14px',
+      gap: '6px',
+      'font-size': isMobile ? '12px' : '13px',
       color: '#cbd5e1',
       background: 'rgba(51, 65, 85, 0.5)',
-      padding: '8px 16px',
-      'border-radius': '12px',
-      border: '1px solid rgba(148, 163, 184, 0.1)'
+      padding: '6px 12px',
+      'border-radius': '8px',
+      border: '1px solid rgba(148, 163, 184, 0.1)',
+      'white-space': 'nowrap',
+      'flex-shrink': 0
     },
     mainContent: {
       flex: 1,
@@ -827,13 +833,14 @@ export function ActivityCanvas(props) {
       display: 'flex',
       'flex-direction': 'column',
       'min-width': 0,
-      position: 'relative'
+      position: 'relative',
+      padding: isMobile ? '0' : '0'
     },
     canvasContainer: {
       flex: 1,
-      margin: isMobile ? '16px' : '24px',
+      margin: isMobile ? '12px' : '20px',
       background: '#ffffff',
-      'border-radius': '16px',
+      'border-radius': isMobile ? '12px' : '16px',
       'box-shadow': '0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.3)',
       overflow: 'hidden',
       position: 'relative',
@@ -846,19 +853,22 @@ export function ActivityCanvas(props) {
       display: 'flex',
       'flex-direction': 'column',
       'overflow-y': 'auto',
-      'flex-shrink': 0
+      'flex-shrink': 0,
+      'max-height': '100%',
+      'scrollbar-width': 'thin',
+      'scrollbar-color': 'rgba(148, 163, 184, 0.3) transparent'
     },
     button: {
-      padding: '12px 20px',
+      padding: isMobile ? '10px 16px' : '12px 20px',
       'border-radius': '12px',
       border: 'none',
       'font-weight': '600',
-      'font-size': '14px',
+      'font-size': isMobile ? '13px' : '14px',
       cursor: 'pointer',
       transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
       display: 'flex',
       'align-items': 'center',
-      gap: '8px',
+      gap: '6px',
       'white-space': 'nowrap'
     },
     primaryButton: {
@@ -887,11 +897,12 @@ export function ActivityCanvas(props) {
             {/* Title Section */}
             <div style={modernStyles.titleSection}>
               <h1 style={modernStyles.title}>
-                <span style={{ 'font-size': isMobile ? '28px' : '36px' }}>🎨</span>
+                <span style={{ 'font-size': isMobile ? '24px' : '32px' }}>🎨</span>
                 <span style={{
                   overflow: 'hidden',
                   'text-overflow': 'ellipsis',
-                  'white-space': 'nowrap'
+                  'white-space': 'nowrap',
+                  'max-width': isMobile ? 'calc(100vw - 180px)' : 'none'
                 }}>
                   {props.activity.title || 'Untitled Canvas'}
                 </span>
@@ -910,12 +921,13 @@ export function ActivityCanvas(props) {
                   onClick={() => setShowParticipants(!showParticipants())}
                   style={{
                     ...modernStyles.button,
-                    ...(showParticipants() ? modernStyles.primaryButton : modernStyles.secondaryButton)
+                    ...(showParticipants() ? modernStyles.primaryButton : modernStyles.secondaryButton),
+                    padding: '10px 14px'
                   }}
                   onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
                   onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
                 >
-                  <span style={{ 'font-size': '18px' }}>👥</span>
+                  <span style={{ 'font-size': '16px' }}>👥</span>
                   <span>{participants().size + 1}</span>
                 </button>
               </Show>
@@ -924,7 +936,8 @@ export function ActivityCanvas(props) {
                 onClick={props.onClose}
                 style={{
                   ...modernStyles.button,
-                  ...modernStyles.dangerButton
+                  ...modernStyles.dangerButton,
+                  padding: isMobile ? '10px' : '10px 16px'
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform = 'translateY(-2px)';
@@ -935,7 +948,7 @@ export function ActivityCanvas(props) {
                   e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.4)';
                 }}
               >
-                <span style={{ 'font-size': '18px' }}>✕</span>
+                <span style={{ 'font-size': '16px' }}>✕</span>
                 <Show when={!isMobile}>
                   <span>Close</span>
                 </Show>
@@ -945,13 +958,15 @@ export function ActivityCanvas(props) {
 
           {/* Metadata */}
           <div style={modernStyles.metadata}>
-            <div style={modernStyles.metadataItem}>
-              <span style={{ 'font-size': '18px' }}>📍</span>
+            <div style={{
+              ...modernStyles.metadataItem,
+              'max-width': isMobile ? '45%' : 'none'
+            }}>
+              <span style={{ 'font-size': '16px', 'flex-shrink': 0 }}>📍</span>
               <span style={{
                 overflow: 'hidden',
                 'text-overflow': 'ellipsis',
-                'white-space': 'nowrap',
-                'max-width': isMobile ? '150px' : '250px'
+                'white-space': 'nowrap'
               }}>
                 {props.activity.street || 'Unknown Location'}
               </span>
@@ -959,16 +974,16 @@ export function ActivityCanvas(props) {
 
             <Show when={props.activity.ownerName && props.activity.ownerName !== 'Anonymous'}>
               <div style={modernStyles.metadataItem}>
-                <span style={{ 'font-size': '18px' }}>👤</span>
+                <span style={{ 'font-size': '16px' }}>👤</span>
                 <span>by {props.activity.ownerName}</span>
               </div>
             </Show>
 
             <div style={modernStyles.metadataItem}>
-              <span style={{ 'font-size': '18px' }}>🎯</span>
+              <span style={{ 'font-size': '16px' }}>🎯</span>
               <span>
-                {props.wsManager?.userHash === props.activity?.ownerId ? 'You own this' :
-                 canContribute() ? 'Can contribute' : 'View only'}
+                {props.wsManager?.userHash === props.activity?.ownerId ? 'Owner' :
+                 canContribute() ? 'Contributor' : 'Viewer'}
               </span>
             </div>
 
@@ -982,8 +997,8 @@ export function ActivityCanvas(props) {
                   animation: 'pulse 2s infinite'
                 }}
               >
-                <span style={{ 'font-size': '18px' }}>🔔</span>
-                <span>{contributionRequests().length} request{contributionRequests().length !== 1 ? 's' : ''}</span>
+                <span style={{ 'font-size': '16px' }}>🔔</span>
+                <span>{contributionRequests().length}</span>
               </button>
             </Show>
           </div>
