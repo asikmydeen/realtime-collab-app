@@ -1,4 +1,5 @@
 import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
+import { useNavigate } from '@solidjs/router';
 import { mapService } from '../services/mapService';
 import { FabricCanvas } from './FabricCanvas';
 
@@ -31,6 +32,7 @@ function isInBounds(lat, lng, bounds) {
 }
 
 export function ActivityView(props) {
+  const navigate = useNavigate();
   let mapCanvasRef;
   let tilesCanvasRef;
 
@@ -364,16 +366,8 @@ export function ActivityView(props) {
 
   // Handle activity selection
   function selectActivity(activity) {
-    setSelectedActivity(activity);
-    setShowActivityPanel(true);
-
-    // Join the activity
-    if (props.wsManager) {
-      props.wsManager.send({
-        type: 'joinActivity',
-        activityId: activity.id
-      });
-    }
+    // Navigate to the canvas page with the activity ID
+    navigate(`/canvas/${activity.id}`);
   }
 
   // Request user's activities to open most recent one

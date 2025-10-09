@@ -2,6 +2,7 @@ import { createSignal, onMount, onCleanup, createEffect, Show } from 'solid-js';
 import { Route } from '@solidjs/router';
 import { MapView } from './pages/MapView';
 import { ListView } from './pages/ListView';
+import { CanvasPage } from './pages/CanvasPage';
 import { WebSocketManager } from './lib/websocket';
 import { WasmProcessor } from './lib/wasm';
 import { config } from './config';
@@ -225,6 +226,16 @@ function App() {
         <ListView
           connected={connected}
           wsManager={wsManager}
+        />
+      } />
+      <Route path="/canvas/:id" component={() =>
+        <CanvasPage
+          connected={connected}
+          wsManager={wsManager}
+          color={color}
+          setColor={setColor}
+          brushSize={brushSize}
+          setBrushSize={setBrushSize}
         />
       } />
 
